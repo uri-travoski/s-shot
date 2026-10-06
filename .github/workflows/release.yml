@@ -48,22 +48,18 @@ jobs:
 
       - name: Build AppImage
         run: |
-          # Prepare AppDir
           DESTDIR=AppDir cmake --install build
           mkdir -p AppDir/usr/share/metainfo
           cp resources/org.sshot.s-shot.metainfo.xml AppDir/usr/share/metainfo/
 
-          # Download linuxdeploy and Qt plugin
           wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
           wget -q https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
           chmod +x linuxdeploy*.AppImage
 
-          # Extract AppImages to run in CI environment
           ./linuxdeploy-x86_64.AppImage --appimage-extract
           ./linuxdeploy-plugin-qt-x86_64.AppImage --appimage-extract
           mv squashfs-root linuxdeploy-root
 
-          # Run linuxdeploy
           export QMAKE=/usr/lib/qt6/bin/qmake
           export PATH="$(pwd)/linuxdeploy-root/usr/bin:$PATH"
           ./linuxdeploy-root/usr/bin/linuxdeploy \
@@ -84,22 +80,18 @@ jobs:
   build-flatpak:
     name: Build Flatpak
     runs-on: ubuntu-latest
+    container:
+      image: bilelmoussaoui/flatpak-github-actions:kde-6.8
+      options: --privileged
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Flatpak
-        uses: flatpak/flatpak-github-actions/setup-flatpak@v1
-        with:
-          runtime-repo: https://dl.flathub.org/repo/flathub.flatpakrepo
-
       - name: Build Flatpak bundle
-        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
-        with:
-          bundle: s-shot-0.9.0.flatpak
-          manifest-path: packaging/flatpak/org.sshot.s-shot.yml
-          app-id: org.sshot.s-shot
-          branch: stable
+        run: |
+          flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak-builder --force-clean --repo=repo build packaging/flatpak/org.sshot.s-shot.yml
+          flatpak build-bundle repo s-shot-0.9.0.flatpak org.sshot.s-shot
 
       - name: Upload Flatpak artifact
         uses: actions/upload-artifact@v4
@@ -110,6 +102,7 @@ jobs:
   publish-release:
     name: Publish Release Assets
     needs: [build-deb-rpm-appimage, build-flatpak]
+    if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
