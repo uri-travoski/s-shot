@@ -1,0 +1,24 @@
+# Credentials
+credentials.md
+
+# Build & distribution directories
+build/
+dist/
+_CPack_Packages/
+
+# Packaged binaries
+*.deb
+*.rpm
+*.AppImage
+*.flatpak
+
+# CMake artifacts
+CMakeCache.txt
+CMakeFiles/
+Makefile
+cmake_install.cmake
+
+# Logs and temporary files
+*.log
+/tmp/
+.cache/

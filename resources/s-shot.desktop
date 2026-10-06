@@ -1,0 +1,24 @@
+[Desktop Entry]
+Name=S-Shot
+GenericName=Screenshot & Annotation Tool
+Comment=Lightweight Screenshot and Annotation Tool
+Exec=s-shot %F
+Icon=s-shot
+Terminal=false
+Type=Application
+Categories=Graphics;Utility;2DGraphics;RasterGraphics;
+MimeType=image/png;image/jpeg;image/bmp;image/webp;
+StartupNotify=true
+Actions=Fullscreen;Region;Editor;
+
+[Desktop Action Fullscreen]
+Name=Capture Fullscreen
+Exec=s-shot --fullscreen
+
+[Desktop Action Region]
+Name=Capture Selected Region
+Exec=s-shot --region
+
+[Desktop Action Editor]
+Name=Open Annotation Editor
+Exec=s-shot --editor

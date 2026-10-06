@@ -1,0 +1,50 @@
+<!DOCTYPE RCC><RCC version="1.0">
+<qresource prefix="/">
+    <file>icons/s-shot.svg</file>
+    <file>icons/select.svg</file>
+    <file>icons/pen.svg</file>
+    <file>icons/highlighter.svg</file>
+    <file>icons/line.svg</file>
+    <file>icons/arrow.svg</file>
+    <file>icons/double_arrow.svg</file>
+    <file>icons/rect.svg</file>
+    <file>icons/ellipse.svg</file>
+    <file>icons/text.svg</file>
+    <file>icons/badge.svg</file>
+    <file>icons/blur.svg</file>
+    <file>icons/crop.svg</file>
+    <file>icons/undo.svg</file>
+    <file>icons/redo.svg</file>
+    <file>icons/copy.svg</file>
+    <file>icons/save.svg</file>
+    <file>icons/open.svg</file>
+    <file>icons/new.svg</file>
+    <file>icons/zoom_in.svg</file>
+    <file>icons/zoom_out.svg</file>
+    <file>icons/zoom_fit.svg</file>
+    <file>icons/zoom_100.svg</file>
+
+    <file>icons/light/select.svg</file>
+    <file>icons/light/pen.svg</file>
+    <file>icons/light/highlighter.svg</file>
+    <file>icons/light/line.svg</file>
+    <file>icons/light/arrow.svg</file>
+    <file>icons/light/double_arrow.svg</file>
+    <file>icons/light/rect.svg</file>
+    <file>icons/light/ellipse.svg</file>
+    <file>icons/light/text.svg</file>
+    <file>icons/light/badge.svg</file>
+    <file>icons/light/blur.svg</file>
+    <file>icons/light/crop.svg</file>
+    <file>icons/light/undo.svg</file>
+    <file>icons/light/redo.svg</file>
+    <file>icons/light/copy.svg</file>
+    <file>icons/light/save.svg</file>
+    <file>icons/light/open.svg</file>
+    <file>icons/light/new.svg</file>
+    <file>icons/light/zoom_in.svg</file>
+    <file>icons/light/zoom_out.svg</file>
+    <file>icons/light/zoom_fit.svg</file>
+    <file>icons/light/zoom_100.svg</file>
+</qresource>
+</RCC>
