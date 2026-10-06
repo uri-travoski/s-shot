@@ -91,23 +91,27 @@ void RegionSnippingOverlay::paintEvent(QPaintEvent*) {
 }
 
 void RegionSnippingOverlay::drawMagnifier(QPainter& p, const QPoint& pos) {
-    const int diameter = 144;
-    const int radius = diameter / 2;
+    const int K = 9;
+    const int srcSpan = 2 * K + 1; // 19 pixels (exact center pixel at index 9)
     const int zoomFactor = 8;
-    const int srcSpan = diameter / zoomFactor; // 18 pixels
+    const int diameter = srcSpan * zoomFactor; // 152 pixels
+    const int radius = diameter / 2; // 76 pixels
 
     // Center loupe directly on the cursor position
     QRect loupeRect(pos.x() - radius, pos.y() - radius, diameter, diameter);
 
-    // Extract 18x18 source pixel region safely
-    int srcX = pos.x() - srcSpan / 2;
-    int srcY = pos.y() - srcSpan / 2;
+    // Extract 19x19 source pixel region safely with boundary clipping
+    QRect srcRect(pos.x() - K, pos.y() - K, srcSpan, srcSpan);
+    QRect validScreenRect = srcRect.intersected(m_screenGrab.rect());
 
     QImage srcImg(srcSpan, srcSpan, QImage::Format_ARGB32_Premultiplied);
     srcImg.fill(Qt::black);
-    {
-        QPainter pSrc(&srcImg);
-        pSrc.drawPixmap(0, 0, m_screenGrab, srcX, srcY, srcSpan, srcSpan);
+    if (!validScreenRect.isEmpty()) {
+        QImage grabbedSub = m_screenGrab.copy(validScreenRect).toImage().convertToFormat(QImage::Format_ARGB32_Premultiplied);
+        int destX = validScreenRect.left() - srcRect.left();
+        int destY = validScreenRect.top() - srcRect.top();
+        QPainter pImg(&srcImg);
+        pImg.drawImage(destX, destY, grabbedSub);
     }
     QPixmap zoomPix = QPixmap::fromImage(srcImg).scaled(diameter, diameter, Qt::IgnoreAspectRatio, Qt::FastTransformation);
 
@@ -118,6 +122,26 @@ void RegionSnippingOverlay::drawMagnifier(QPainter& p, const QPoint& pos) {
     p.setClipPath(circlePath);
 
     p.drawPixmap(loupeRect.topLeft(), zoomPix);
+
+    // If actively dragging a selection, dim unselected pixels and draw selection boundary inside loupe
+    if (m_isSelecting && !m_selectedRect.isNull() && m_selectedRect.isValid()) {
+        int selLeft = loupeRect.left() + (m_selectedRect.left() - srcRect.left()) * zoomFactor;
+        int selTop  = loupeRect.top()  + (m_selectedRect.top()  - srcRect.top()) * zoomFactor;
+        int selW    = m_selectedRect.width() * zoomFactor;
+        int selH    = m_selectedRect.height() * zoomFactor;
+        QRect zoomedSelRect(selLeft, selTop, selW, selH);
+
+        QPainterPath unselectedPath;
+        unselectedPath.addEllipse(loupeRect);
+        QPainterPath selPath;
+        selPath.addRect(zoomedSelRect);
+        QPainterPath dimPath = unselectedPath.subtracted(selPath);
+        p.fillPath(dimPath, QColor(0, 0, 0, 110));
+
+        p.setPen(QPen(QColor(48, 229, 0), 2, Qt::SolidLine));
+        p.setBrush(Qt::NoBrush);
+        p.drawRect(zoomedSelRect);
+    }
 
     // 2. Pixel grid
     p.setPen(QPen(QColor(255, 255, 255, 35), 1));
