@@ -12,6 +12,7 @@ public:
 
     void addPoint(const QPointF& pt);
     bool isHighlighter() const { return m_isHighlighter; }
+    QPainterPath path() const { return m_path; }
 
     QRectF boundingRect() const override;
     QPainterPath shape() const override;

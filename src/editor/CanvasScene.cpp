@@ -366,8 +366,17 @@ void CanvasScene::createNewItem(const QPointF& pos) {
     }
     case ToolType::Highlighter: {
         PenItem* hl = new PenItem(true);
-        hl->setStrokeColor(m_strokeColor);
-        hl->setStrokeWidth(m_strokeWidth);
+        QColor hlColor = m_strokeColor;
+        if (hlColor.alpha() == 255) {
+            if (hlColor == QColor(255, 30, 30)) {
+                hlColor = QColor(255, 235, 59, 140);
+            } else {
+                hlColor.setAlpha(140);
+            }
+        }
+        hl->setStrokeColor(hlColor);
+        int w = m_strokeWidth < 10 ? 18 : m_strokeWidth;
+        hl->setStrokeWidth(w);
         hl->addPoint(pos);
         m_activeItem = hl;
         break;
@@ -440,7 +449,7 @@ void CanvasScene::createNewItem(const QPointF& pos) {
         return;
     }
     case ToolType::Blur: {
-        BlurItem* blur = new BlurItem(QRectF(pos, pos), m_basePixmapItem->pixmap());
+        BlurItem* blur = new BlurItem(QRectF(pos, pos), m_basePixmapItem->pixmap(), m_blurLevel);
         m_activeItem = blur;
         break;
     }
@@ -490,6 +499,15 @@ void CanvasScene::updateActiveItem(const QPointF& pos) {
 
 void CanvasScene::finishActiveItem() {
     if (!m_activeItem) return;
+
+    if (auto* blur = dynamic_cast<BlurItem*>(m_activeItem)) {
+        if (blur->rect().width() < 3 || blur->rect().height() < 3) {
+            removeItem(m_activeItem);
+            delete m_activeItem;
+            m_activeItem = nullptr;
+            return;
+        }
+    }
 
     // Add to undo stack
     removeItem(m_activeItem); // AddItemCommand will re-add and manage lifecycle

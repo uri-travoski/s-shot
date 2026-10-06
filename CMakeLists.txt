@@ -13,7 +13,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Svg Network)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Svg Network Test)
 find_package(X11 REQUIRED)
 
 set(SOURCES
@@ -65,6 +65,31 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
     target_compile_options(s-shot PRIVATE -O3 -ffunction-sections -fdata-sections)
     target_link_options(s-shot PRIVATE -Wl,--gc-sections -Wl,--as-needed)
 endif()
+
+enable_testing()
+add_executable(test_editor_tools
+    tests/test_editor_tools.cpp
+    src/editor/CanvasScene.cpp
+    src/editor/items/BaseAnnotationItem.cpp
+    src/editor/items/PenItem.cpp
+    src/editor/items/ArrowItem.cpp
+    src/editor/items/ShapeItem.cpp
+    src/editor/items/BadgeItem.cpp
+    src/editor/items/TextItem.cpp
+    src/editor/items/BlurItem.cpp
+)
+target_include_directories(test_editor_tools PRIVATE
+    src
+    src/editor
+    src/editor/items
+)
+target_link_libraries(test_editor_tools PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Test
+)
+add_test(NAME test_editor_tools COMMAND test_editor_tools)
 
 # Installation rules
 include(GNUInstallDirs)

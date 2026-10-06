@@ -1,0 +1,305 @@
+#include <QTest>
+#include <QApplication>
+#include <QPainter>
+#include <QStyleOptionGraphicsItem>
+#include <QGraphicsSceneMouseEvent>
+#include "editor/CanvasScene.h"
+#include "editor/items/PenItem.h"
+#include "editor/items/BlurItem.h"
+#include "editor/items/ArrowItem.h"
+#include "editor/items/ShapeItem.h"
+#include "editor/items/BadgeItem.h"
+
+class TestScene : public CanvasScene {
+public:
+    using CanvasScene::mousePressEvent;
+    using CanvasScene::mouseMoveEvent;
+    using CanvasScene::mouseReleaseEvent;
+};
+
+class TestEditorTools : public QObject {
+    Q_OBJECT
+
+private slots:
+    void initTestCase();
+    void testPenItemDrawing();
+    void testHighlighterDrawingAndBlending();
+    void testBlurItemEffect();
+    void testBlurItemLevels();
+    void testBlurItemMovement();
+    void testCanvasSceneToolIntegration();
+    void testCanvasSceneAreaSelectionAndCrop();
+    void testCanvasSceneUndoRedo();
+};
+
+void TestEditorTools::initTestCase() {
+}
+
+void TestEditorTools::testPenItemDrawing() {
+    PenItem pen(false);
+    pen.setStrokeColor(QColor(255, 0, 0));
+    pen.setStrokeWidth(4);
+
+    QVERIFY(pen.path().isEmpty());
+    pen.addPoint(QPointF(10, 10));
+    QVERIFY(!pen.path().isEmpty());
+    pen.addPoint(QPointF(50, 50));
+    pen.addPoint(QPointF(100, 20));
+
+    QRectF b = pen.boundingRect();
+    QVERIFY(b.width() >= 80);
+    QVERIFY(b.height() >= 30);
+
+    QImage img(150, 100, QImage::Format_ARGB32_Premultiplied);
+    img.fill(Qt::transparent);
+    QPainter p(&img);
+    QStyleOptionGraphicsItem opt;
+    pen.paint(&p, &opt, nullptr);
+    p.end();
+
+    int coloredPixels = 0;
+    for (int y = 0; y < img.height(); ++y) {
+        for (int x = 0; x < img.width(); ++x) {
+            if (qAlpha(img.pixel(x, y)) > 50) {
+                coloredPixels++;
+            }
+        }
+    }
+    QVERIFY(coloredPixels > 50);
+}
+
+void TestEditorTools::testHighlighterDrawingAndBlending() {
+    PenItem hl(true);
+    QVERIFY(hl.isHighlighter());
+    QVERIFY(hl.strokeWidth() >= 14);
+    QVERIFY(hl.strokeColor().alpha() < 255);
+
+    hl.addPoint(QPointF(10, 50));
+    hl.addPoint(QPointF(90, 50));
+
+    QImage base(100, 100, QImage::Format_ARGB32_Premultiplied);
+    base.fill(Qt::white);
+    QPainter bp(&base);
+    bp.setPen(QPen(Qt::black, 4));
+    bp.drawLine(50, 10, 50, 90);
+    bp.end();
+
+    QPainter hp(&base);
+    QStyleOptionGraphicsItem opt;
+    hl.paint(&hp, &opt, nullptr);
+    hp.end();
+
+    QRgb interPix = base.pixel(50, 50);
+    QVERIFY(qRed(interPix) < 50);
+    QVERIFY(qGreen(interPix) < 50);
+    QVERIFY(qBlue(interPix) < 50);
+
+    QRgb paperPix = base.pixel(20, 50);
+    QVERIFY(qRed(paperPix) > 200);
+    QVERIFY(qGreen(paperPix) > 180);
+    QVERIFY(qBlue(paperPix) < 170);
+}
+
+void TestEditorTools::testBlurItemEffect() {
+    QImage srcImg(100, 100, QImage::Format_ARGB32_Premultiplied);
+    for (int y = 0; y < 100; ++y) {
+        for (int x = 0; x < 100; ++x) {
+            srcImg.setPixel(x, y, (x < 50) ? qRgb(0, 0, 0) : qRgb(255, 255, 255));
+        }
+    }
+    QPixmap srcPix = QPixmap::fromImage(srcImg);
+
+    BlurItem blur(QRectF(20, 20, 60, 60), srcPix, 5);
+
+    QImage renderTarget(100, 100, QImage::Format_ARGB32_Premultiplied);
+    renderTarget.fill(Qt::transparent);
+    QPainter p(&renderTarget);
+    QStyleOptionGraphicsItem opt;
+    blur.paint(&p, &opt, nullptr);
+    p.end();
+
+    int intermediateGrayPixels = 0;
+    for (int y = 30; y < 70; ++y) {
+        for (int x = 40; x < 60; ++x) {
+            int val = qRed(renderTarget.pixel(x, y));
+            if (val > 30 && val < 225) {
+                intermediateGrayPixels++;
+            }
+        }
+    }
+    QVERIFY(intermediateGrayPixels > 20);
+}
+
+void TestEditorTools::testBlurItemLevels() {
+    QImage srcImg(120, 120, QImage::Format_ARGB32_Premultiplied);
+    for (int y = 0; y < 120; ++y) {
+        for (int x = 0; x < 120; ++x) {
+            srcImg.setPixel(x, y, ((x / 10) % 2 == 0) ? qRgb(0, 0, 0) : qRgb(255, 255, 255));
+        }
+    }
+    QPixmap srcPix = QPixmap::fromImage(srcImg);
+
+    BlurItem blurLight(QRectF(10, 10, 100, 100), srcPix, 1);
+    QImage outLight(120, 120, QImage::Format_ARGB32_Premultiplied);
+    outLight.fill(Qt::black);
+    QPainter p1(&outLight);
+    QStyleOptionGraphicsItem opt;
+    blurLight.paint(&p1, &opt, nullptr);
+    p1.end();
+
+    BlurItem blurHeavy(QRectF(10, 10, 100, 100), srcPix, 10);
+    QImage outHeavy(120, 120, QImage::Format_ARGB32_Premultiplied);
+    outHeavy.fill(Qt::black);
+    QPainter p2(&outHeavy);
+    blurHeavy.paint(&p2, &opt, nullptr);
+    p2.end();
+
+    int diffSumLight = 0;
+    int diffSumHeavy = 0;
+    for (int x = 20; x < 99; ++x) {
+        diffSumLight += qAbs(qRed(outLight.pixel(x + 1, 50)) - qRed(outLight.pixel(x, 50)));
+        diffSumHeavy += qAbs(qRed(outHeavy.pixel(x + 1, 50)) - qRed(outHeavy.pixel(x, 50)));
+    }
+
+    QVERIFY(diffSumHeavy < diffSumLight);
+}
+
+void TestEditorTools::testBlurItemMovement() {
+    QImage srcImg(100, 100, QImage::Format_ARGB32_Premultiplied);
+    srcImg.fill(Qt::black);
+    for (int y = 0; y < 40; ++y) {
+        for (int x = 0; x < 40; ++x) {
+            srcImg.setPixel(x, y, qRgb(255, 255, 255));
+        }
+    }
+    QPixmap srcPix = QPixmap::fromImage(srcImg);
+
+    CanvasScene scene;
+    scene.setBasePixmap(srcPix);
+
+    BlurItem* blur = new BlurItem(QRectF(0, 0, 30, 30), srcPix, 5);
+    scene.addItem(blur);
+
+    QImage target1(30, 30, QImage::Format_ARGB32_Premultiplied);
+    QPainter p1(&target1);
+    QStyleOptionGraphicsItem opt;
+    blur->paint(&p1, &opt, nullptr);
+    p1.end();
+    QVERIFY(qRed(target1.pixel(15, 15)) > 200);
+
+    blur->setPos(60, 60);
+
+    QImage target2(30, 30, QImage::Format_ARGB32_Premultiplied);
+    QPainter p2(&target2);
+    blur->paint(&p2, &opt, nullptr);
+    p2.end();
+    QVERIFY(qRed(target2.pixel(15, 15)) < 50);
+}
+
+void TestEditorTools::testCanvasSceneToolIntegration() {
+    TestScene scene;
+    QPixmap base(200, 200);
+    base.fill(Qt::white);
+    scene.setBasePixmap(base);
+
+    scene.setCurrentTool(ToolType::Pen);
+    QCOMPARE(scene.currentTool(), ToolType::Pen);
+
+    QGraphicsSceneMouseEvent pressEv(QEvent::GraphicsSceneMousePress);
+    pressEv.setButton(Qt::LeftButton);
+    pressEv.setScenePos(QPointF(20, 20));
+    scene.mousePressEvent(&pressEv);
+
+    QGraphicsSceneMouseEvent moveEv(QEvent::GraphicsSceneMouseMove);
+    moveEv.setButton(Qt::LeftButton);
+    moveEv.setScenePos(QPointF(40, 40));
+    scene.mouseMoveEvent(&moveEv);
+
+    QGraphicsSceneMouseEvent releaseEv(QEvent::GraphicsSceneMouseRelease);
+    releaseEv.setButton(Qt::LeftButton);
+    releaseEv.setScenePos(QPointF(60, 40));
+    scene.mouseReleaseEvent(&releaseEv);
+
+    QCOMPARE(scene.items().count(), 3);
+
+    scene.setCurrentTool(ToolType::Blur);
+    scene.setBlurLevel(7);
+    QCOMPARE(scene.blurLevel(), 7);
+
+    pressEv.setScenePos(QPointF(100, 100));
+    scene.mousePressEvent(&pressEv);
+    moveEv.setScenePos(QPointF(150, 150));
+    scene.mouseMoveEvent(&moveEv);
+    releaseEv.setScenePos(QPointF(150, 150));
+    scene.mouseReleaseEvent(&releaseEv);
+
+    QCOMPARE(scene.items().count(), 4);
+}
+
+void TestEditorTools::testCanvasSceneAreaSelectionAndCrop() {
+    TestScene scene;
+    QPixmap base(200, 200);
+    base.fill(Qt::blue);
+    scene.setBasePixmap(base);
+
+    scene.setCurrentTool(ToolType::Select);
+
+    QGraphicsSceneMouseEvent pressEv(QEvent::GraphicsSceneMousePress);
+    pressEv.setButton(Qt::LeftButton);
+    pressEv.setScenePos(QPointF(10, 10));
+    scene.mousePressEvent(&pressEv);
+
+    QGraphicsSceneMouseEvent moveEv(QEvent::GraphicsSceneMouseMove);
+    moveEv.setButton(Qt::LeftButton);
+    moveEv.setScenePos(QPointF(110, 110));
+    scene.mouseMoveEvent(&moveEv);
+
+    QGraphicsSceneMouseEvent releaseEv(QEvent::GraphicsSceneMouseRelease);
+    releaseEv.setButton(Qt::LeftButton);
+    releaseEv.setScenePos(QPointF(110, 110));
+    scene.mouseReleaseEvent(&releaseEv);
+
+    QVERIFY(scene.hasAreaSelection());
+    QCOMPARE(scene.selectedArea().toRect(), QRect(10, 10, 100, 100));
+
+    scene.cropToSelectedArea();
+    QCOMPARE(scene.basePixmap().size(), QSize(100, 100));
+    QVERIFY(!scene.hasAreaSelection());
+}
+
+void TestEditorTools::testCanvasSceneUndoRedo() {
+    TestScene scene;
+    QPixmap base(200, 200);
+    base.fill(Qt::white);
+    scene.setBasePixmap(base);
+
+    scene.setCurrentTool(ToolType::Rectangle);
+
+    QGraphicsSceneMouseEvent pressEv(QEvent::GraphicsSceneMousePress);
+    pressEv.setButton(Qt::LeftButton);
+    pressEv.setScenePos(QPointF(10, 10));
+    scene.mousePressEvent(&pressEv);
+
+    QGraphicsSceneMouseEvent releaseEv(QEvent::GraphicsSceneMouseRelease);
+    releaseEv.setButton(Qt::LeftButton);
+    releaseEv.setScenePos(QPointF(60, 60));
+    scene.mouseReleaseEvent(&releaseEv);
+
+    int countAfterAdd = scene.items().count();
+
+    QVERIFY(scene.undoStack()->canUndo());
+    scene.undoStack()->undo();
+    QCOMPARE(scene.items().count(), countAfterAdd - 1);
+
+    QVERIFY(scene.undoStack()->canRedo());
+    scene.undoStack()->redo();
+    QCOMPARE(scene.items().count(), countAfterAdd);
+}
+
+int main(int argc, char** argv) {
+    QApplication app(argc, argv);
+    TestEditorTools tc;
+    return QTest::qExec(&tc, argc, argv);
+}
+
+#include "test_editor_tools.moc"

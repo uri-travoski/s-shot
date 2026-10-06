@@ -3,13 +3,76 @@
 #include <QPainterPath>
 #include <QImage>
 
-BlurItem::BlurItem(const QRectF& rect, const QPixmap& sourcePixmap)
+static void fastBoxBlur(QImage& img, int radius) {
+    if (radius <= 0 || img.width() <= 2 || img.height() <= 2) return;
+
+    int w = img.width();
+    int h = img.height();
+    int div = 2 * radius + 1;
+
+    QImage temp = img;
+
+    // Horizontal pass
+    for (int y = 0; y < h; ++y) {
+        const QRgb* srcLine = reinterpret_cast<const QRgb*>(img.constScanLine(y));
+        QRgb* dstLine = reinterpret_cast<QRgb*>(temp.scanLine(y));
+
+        int sumA = 0, sumR = 0, sumG = 0, sumB = 0;
+        for (int i = -radius; i <= radius; ++i) {
+            QRgb p = srcLine[qBound(0, i, w - 1)];
+            sumA += qAlpha(p);
+            sumR += qRed(p);
+            sumG += qGreen(p);
+            sumB += qBlue(p);
+        }
+
+        for (int x = 0; x < w; ++x) {
+            dstLine[x] = qRgba(sumR / div, sumG / div, sumB / div, sumA / div);
+            QRgb pOut = srcLine[qBound(0, x - radius, w - 1)];
+            QRgb pIn  = srcLine[qBound(0, x + radius + 1, w - 1)];
+            sumA += qAlpha(pIn) - qAlpha(pOut);
+            sumR += qRed(pIn) - qRed(pOut);
+            sumG += qGreen(pIn) - qGreen(pOut);
+            sumB += qBlue(pIn) - qBlue(pOut);
+        }
+    }
+
+    // Vertical pass
+    for (int x = 0; x < w; ++x) {
+        int sumA = 0, sumR = 0, sumG = 0, sumB = 0;
+        for (int i = -radius; i <= radius; ++i) {
+            int py = qBound(0, i, h - 1);
+            QRgb p = *reinterpret_cast<const QRgb*>(temp.constScanLine(py) + x * 4);
+            sumA += qAlpha(p);
+            sumR += qRed(p);
+            sumG += qGreen(p);
+            sumB += qBlue(p);
+        }
+
+        for (int y = 0; y < h; ++y) {
+            QRgb* dstPix = reinterpret_cast<QRgb*>(img.scanLine(y) + x * 4);
+            *dstPix = qRgba(sumR / div, sumG / div, sumB / div, sumA / div);
+            int yOut = qBound(0, y - radius, h - 1);
+            int yIn  = qBound(0, y + radius + 1, h - 1);
+            QRgb pOut = *reinterpret_cast<const QRgb*>(temp.constScanLine(yOut) + x * 4);
+            QRgb pIn  = *reinterpret_cast<const QRgb*>(temp.constScanLine(yIn) + x * 4);
+            sumA += qAlpha(pIn) - qAlpha(pOut);
+            sumR += qRed(pIn) - qRed(pOut);
+            sumG += qGreen(pIn) - qGreen(pOut);
+            sumB += qBlue(pIn) - qBlue(pOut);
+        }
+    }
+}
+
+BlurItem::BlurItem(const QRectF& rect, const QPixmap& sourcePixmap, int blurLevel)
     : m_rect(rect)
+    , m_blurLevel(qBound(1, blurLevel, 10))
 {
+    setFlag(ItemSendsGeometryChanges, true);
     m_strokeColor = QColor(48, 229, 0, 160);
     m_strokeWidth = 1;
     if (!sourcePixmap.isNull() && !m_rect.isNull()) {
-        updateEffect(sourcePixmap);
+        applyBlur(sourcePixmap);
     }
 }
 
@@ -19,59 +82,66 @@ void BlurItem::setRect(const QRectF& r) {
     update();
 }
 
-void BlurItem::updateEffect(const QPixmap& sourcePixmap) {
-    generatePixelatedPixmap(sourcePixmap);
+void BlurItem::setBlurLevel(int level) {
+    m_blurLevel = qBound(1, level, 10);
+    if (!m_sourceCache.isNull()) {
+        applyBlur(m_sourceCache);
+    }
     update();
 }
 
-void BlurItem::generatePixelatedPixmap(const QPixmap& sourcePixmap) {
-    QRect r = m_rect.toRect().normalized();
-    if (r.width() <= 0 || r.height() <= 0 || sourcePixmap.isNull()) {
-        m_pixelatedPixmap = QPixmap();
+void BlurItem::updateEffect(const QPixmap& sourcePixmap) {
+    applyBlur(sourcePixmap);
+    update();
+}
+
+QVariant BlurItem::itemChange(GraphicsItemChange change, const QVariant& value) {
+    if (change == ItemPositionHasChanged && !m_sourceCache.isNull()) {
+        applyBlur(m_sourceCache);
+    }
+    return BaseAnnotationItem::itemChange(change, value);
+}
+
+void BlurItem::applyBlur(const QPixmap& sourcePixmap) {
+    m_sourceCache = sourcePixmap;
+    if (sourcePixmap.isNull()) {
+        m_blurredPixmap = QPixmap();
         return;
     }
 
-    // Intersect with source bounds
-    QRect srcBounds(0, 0, sourcePixmap.width(), sourcePixmap.height());
-    QRect clampedRect = r.intersected(srcBounds);
-    if (clampedRect.isEmpty()) return;
+    QRectF sceneRectF = mapToScene(m_rect.normalized()).boundingRect();
+    QRect sceneRect = sceneRectF.toRect();
+    QRect clampedRect = sceneRect.intersected(sourcePixmap.rect());
 
-    QImage subImg = sourcePixmap.copy(clampedRect).toImage().convertToFormat(QImage::Format_ARGB32);
+    if (clampedRect.width() <= 1 || clampedRect.height() <= 1) {
+        m_blurredPixmap = QPixmap();
+        return;
+    }
+
+    QImage subImg = sourcePixmap.copy(clampedRect).toImage().convertToFormat(QImage::Format_ARGB32_Premultiplied);
     int w = subImg.width();
     int h = subImg.height();
 
-    int bs = qMax(4, m_blockSize);
+    int level = qBound(1, m_blurLevel, 10);
+    int scaleFactor = (level >= 7) ? 4 : ((level >= 4) ? 2 : 1);
 
-    // Pixelate block by block
-    for (int y = 0; y < h; y += bs) {
-        for (int x = 0; x < w; x += bs) {
-            int blockW = qMin(bs, w - x);
-            int blockH = qMin(bs, h - y);
-
-            // Compute average color in block
-            quint64 totalR = 0, totalG = 0, totalB = 0, count = 0;
-            for (int by = 0; by < blockH; by += 2) {
-                for (int bx = 0; bx < blockW; bx += 2) {
-                    QRgb p = subImg.pixel(x + bx, y + by);
-                    totalR += qRed(p);
-                    totalG += qGreen(p);
-                    totalB += qBlue(p);
-                    count++;
-                }
-            }
-
-            if (count > 0) {
-                QRgb avgCol = qRgb(totalR / count, totalG / count, totalB / count);
-                for (int by = 0; by < blockH; ++by) {
-                    for (int bx = 0; bx < blockW; ++bx) {
-                        subImg.setPixel(x + bx, y + by, avgCol);
-                    }
-                }
-            }
-        }
+    QImage procImg;
+    if (scaleFactor > 1 && w > scaleFactor * 2 && h > scaleFactor * 2) {
+        procImg = subImg.scaled(w / scaleFactor, h / scaleFactor, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    } else {
+        procImg = subImg;
     }
 
-    m_pixelatedPixmap = QPixmap::fromImage(subImg);
+    int radius = level + 1;
+    fastBoxBlur(procImg, radius);
+    fastBoxBlur(procImg, radius);
+    fastBoxBlur(procImg, radius);
+
+    if (procImg.size() != subImg.size()) {
+        procImg = procImg.scaled(w, h, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    }
+
+    m_blurredPixmap = QPixmap::fromImage(procImg);
 }
 
 QRectF BlurItem::boundingRect() const {
@@ -88,16 +158,11 @@ void BlurItem::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget
     painter->save();
     QRectF r = m_rect.normalized();
 
-    if (!m_pixelatedPixmap.isNull()) {
-        painter->drawPixmap(r.topLeft(), m_pixelatedPixmap);
+    if (!m_blurredPixmap.isNull()) {
+        painter->drawPixmap(r.topLeft(), m_blurredPixmap);
     } else {
-        painter->fillRect(r, QColor(100, 100, 100, 180));
+        painter->fillRect(r, QColor(140, 140, 140, 120));
     }
-
-    // Border
-    painter->setPen(QPen(m_strokeColor, 1.0, Qt::DashLine));
-    painter->setBrush(Qt::NoBrush);
-    painter->drawRect(r);
 
     paintSelectionBorder(painter, r);
     painter->restore();

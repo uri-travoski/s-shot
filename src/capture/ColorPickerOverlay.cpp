@@ -20,6 +20,7 @@ void ColorPickerOverlay::startPicking() {
     m_screenGrab = screen->grabWindow(0, virtualGeo.x(), virtualGeo.y(), virtualGeo.width(), virtualGeo.height());
     m_currentPos = QCursor::pos() - virtualGeo.topLeft();
 
+    setCursor(Qt::BlankCursor);
     showFullScreen();
     raise();
     activateWindow();
@@ -32,59 +33,93 @@ void ColorPickerOverlay::paintEvent(QPaintEvent*) {
     // Render underlying screen
     p.drawPixmap(0, 0, m_screenGrab);
 
-    // Loupe size and settings
-    int loupeSize = 140;
-    int zoomFactor = 8;
-    int srcSize = loupeSize / zoomFactor; // ~17px
+    const int diameter = 144;
+    const int radius = diameter / 2;
+    const int zoomFactor = 8;
+    const int srcSpan = diameter / zoomFactor; // 18 pixels
 
-    int offsetX = 25;
-    int offsetY = 25;
-    if (m_currentPos.x() + offsetX + loupeSize > width()) {
-        offsetX = -loupeSize - 25;
+    // Center loupe directly on current cursor position
+    QRect loupeRect(m_currentPos.x() - radius, m_currentPos.y() - radius, diameter, diameter);
+
+    // Extract 18x18 source pixels safely around cursor
+    int srcX = m_currentPos.x() - srcSpan / 2;
+    int srcY = m_currentPos.y() - srcSpan / 2;
+
+    QImage srcImg(srcSpan, srcSpan, QImage::Format_ARGB32_Premultiplied);
+    srcImg.fill(Qt::black);
+    {
+        QPainter pSrc(&srcImg);
+        pSrc.drawPixmap(0, 0, m_screenGrab, srcX, srcY, srcSpan, srcSpan);
     }
-    if (m_currentPos.y() + offsetY + loupeSize + 40 > height()) {
-        offsetY = -loupeSize - 65;
-    }
+    QPixmap zoomed = QPixmap::fromImage(srcImg).scaled(diameter, diameter, Qt::IgnoreAspectRatio, Qt::FastTransformation);
 
-    QRect loupeRect(m_currentPos.x() + offsetX, m_currentPos.y() + offsetY, loupeSize, loupeSize);
-
-    // Copy source pixels around cursor
-    QRect srcRect(m_currentPos.x() - srcSize / 2, m_currentPos.y() - srcSize / 2, srcSize, srcSize);
-    QPixmap zoomed = m_screenGrab.copy(srcRect).scaled(loupeSize, loupeSize, Qt::KeepAspectRatio, Qt::FastTransformation);
-
-    // Draw circular loupe
+    // 1. Draw circular magnified view
     p.save();
     QPainterPath circlePath;
     circlePath.addEllipse(loupeRect);
     p.setClipPath(circlePath);
+
     p.drawPixmap(loupeRect.topLeft(), zoomed);
 
-    // Draw crosshair at center
-    QPoint center = loupeRect.center();
-    p.setPen(QPen(QColor(48, 229, 0), 1));
-    p.drawRect(center.x() - zoomFactor / 2, center.y() - zoomFactor / 2, zoomFactor, zoomFactor);
+    // 2. Pixel grid
+    p.setPen(QPen(QColor(255, 255, 255, 35), 1));
+    for (int i = 0; i <= diameter; i += zoomFactor) {
+        p.drawLine(loupeRect.left() + i, loupeRect.top(), loupeRect.left() + i, loupeRect.bottom());
+        p.drawLine(loupeRect.left(), loupeRect.top() + i, loupeRect.right(), loupeRect.top() + i);
+    }
+
+    // 3. Precision reticle & center pixel highlight
+    QRect centerPixelRect(m_currentPos.x() - zoomFactor / 2, m_currentPos.y() - zoomFactor / 2, zoomFactor, zoomFactor);
+
+    p.setPen(QPen(QColor(48, 229, 0, 220), 1.5));
+    // Horizontal crosshair lines
+    p.drawLine(loupeRect.left(), m_currentPos.y(), centerPixelRect.left(), m_currentPos.y());
+    p.drawLine(centerPixelRect.right() + 1, m_currentPos.y(), loupeRect.right(), m_currentPos.y());
+    // Vertical crosshair lines
+    p.drawLine(m_currentPos.x(), loupeRect.top(), m_currentPos.x(), centerPixelRect.top());
+    p.drawLine(m_currentPos.x(), centerPixelRect.bottom() + 1, m_currentPos.x(), loupeRect.bottom());
+
+    // Highlight center target pixel box
+    p.setPen(QPen(QColor(48, 229, 0), 1.5));
+    p.setBrush(Qt::NoBrush);
+    p.drawRect(centerPixelRect);
+
     p.restore();
 
-    // Loupe border
-    p.setPen(QPen(QColor(48, 229, 0), 3));
+    // 4. Circular Bezel Ring
+    p.setPen(QPen(QColor(0, 0, 0, 180), 3.5));
     p.setBrush(Qt::NoBrush);
+    p.drawEllipse(loupeRect.adjusted(-1, -1, 1, 1));
+
+    p.setPen(QPen(QColor(48, 229, 0), 2.5));
     p.drawEllipse(loupeRect);
 
-    // Read pixel color
+    // 5. Read pixel color
     int px = qBound(0, m_currentPos.x(), m_screenGrab.width() - 1);
     int py = qBound(0, m_currentPos.y(), m_screenGrab.height() - 1);
     QColor color = m_screenGrab.toImage().pixelColor(px, py);
     QString hex = color.name(QColor::HexRgb).toUpper();
     QString rgbStr = QString("RGB(%1, %2, %3)").arg(color.red()).arg(color.green()).arg(color.blue());
 
-    // Info card below loupe
-    QRect infoRect(loupeRect.left() - 10, loupeRect.bottom() + 8, loupeSize + 20, 48);
+    // 6. Smart Info Card
+    int cardW = 160;
+    int cardH = 46;
+    int cardX = m_currentPos.x() - cardW / 2;
+    if (cardX < 6) cardX = 6;
+    if (cardX + cardW > width() - 6) cardX = width() - cardW - 6;
+
+    int cardY = m_currentPos.y() + radius + 10;
+    if (cardY + cardH > height() - 8) {
+        cardY = m_currentPos.y() - radius - cardH - 10;
+    }
+
+    QRect infoRect(cardX, cardY, cardW, cardH);
     p.setBrush(QColor(20, 20, 20, 230));
-    p.setPen(QPen(QColor(70, 70, 70), 1));
+    p.setPen(QPen(QColor(48, 229, 0), 1));
     p.drawRoundedRect(infoRect, 6, 6);
 
     // Color swatch
-    QRect swatch(infoRect.left() + 8, infoRect.top() + 8, 32, 32);
+    QRect swatch(infoRect.left() + 8, infoRect.top() + 7, 32, 32);
     p.fillRect(swatch, color);
     p.setPen(QColor(200, 200, 200));
     p.drawRect(swatch);
@@ -95,16 +130,17 @@ void ColorPickerOverlay::paintEvent(QPaintEvent*) {
     f.setBold(true);
     p.setFont(f);
     p.setPen(Qt::white);
-    p.drawText(infoRect.left() + 48, infoRect.top() + 20, hex);
+    p.drawText(infoRect.left() + 48, infoRect.top() + 19, hex);
 
     f.setPixelSize(9);
     f.setBold(false);
     p.setFont(f);
     p.setPen(QColor(180, 180, 180));
-    p.drawText(infoRect.left() + 48, infoRect.top() + 36, rgbStr);
+    p.drawText(infoRect.left() + 48, infoRect.top() + 34, rgbStr);
 }
 
 void ColorPickerOverlay::mousePressEvent(QMouseEvent* event) {
+    setCursor(Qt::ArrowCursor);
     if (event->button() == Qt::LeftButton) {
         int px = qBound(0, m_currentPos.x(), m_screenGrab.width() - 1);
         int py = qBound(0, m_currentPos.y(), m_screenGrab.height() - 1);
@@ -129,6 +165,7 @@ void ColorPickerOverlay::mouseMoveEvent(QMouseEvent* event) {
 
 void ColorPickerOverlay::keyPressEvent(QKeyEvent* event) {
     if (event->key() == Qt::Key_Escape) {
+        setCursor(Qt::ArrowCursor);
         hide();
         emit pickingCancelled();
     }

@@ -43,6 +43,7 @@ public slots:
     void onSelectStrokeColor();
     void onSelectFillColor();
     void onStrokeWidthChanged(int width);
+    void onBlurLevelChanged(int level);
     void onResetBadgeCounter();
 
 protected:
@@ -61,6 +62,7 @@ private:
     void setupToolbars();
     void setupStatusBar();
     void updateToolProperties();
+    void updateToolPropertiesVisibility(ToolType tool);
 
     CanvasView* currentView() const;
     CanvasScene* currentScene() const;
@@ -94,9 +96,14 @@ private:
     QAction* m_actCrop = nullptr;
 
     // Property widgets
+    QLabel* m_strokeLbl = nullptr;
     QPushButton* m_strokeColorBtn = nullptr;
+    QLabel* m_fillLbl = nullptr;
     QPushButton* m_fillColorBtn = nullptr;
+    QLabel* m_widthLbl = nullptr;
     QSpinBox* m_strokeWidthSpin = nullptr;
+    QLabel* m_blurRadiusLbl = nullptr;
+    QSpinBox* m_blurRadiusSpin = nullptr;
     QPushButton* m_resetBadgeBtn = nullptr;
 
     // Status bar widgets
@@ -107,5 +114,6 @@ private:
     QColor m_currentStrokeColor = QColor(255, 30, 30);
     QColor m_currentFillColor = Qt::transparent;
     int m_currentStrokeWidth = 3;
+    int m_currentBlurLevel = 5;
     bool m_firstCloseNotification = true;
 };

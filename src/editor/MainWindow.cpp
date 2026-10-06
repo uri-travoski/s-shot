@@ -259,8 +259,8 @@ void MainWindow::setupToolbars() {
     m_propToolBar = addToolBar(tr("Tool Properties"));
     m_propToolBar->setMovable(false);
 
-    QLabel* strokeLbl = new QLabel(tr(" Stroke: "), this);
-    m_propToolBar->addWidget(strokeLbl);
+    m_strokeLbl = new QLabel(tr(" Stroke: "), this);
+    m_propToolBar->addWidget(m_strokeLbl);
 
     m_strokeColorBtn = new QPushButton(this);
     m_strokeColorBtn->setFixedSize(26, 22);
@@ -268,8 +268,8 @@ void MainWindow::setupToolbars() {
     connect(m_strokeColorBtn, &QPushButton::clicked, this, &MainWindow::onSelectStrokeColor);
     m_propToolBar->addWidget(m_strokeColorBtn);
 
-    QLabel* fillLbl = new QLabel(tr("  Fill: "), this);
-    m_propToolBar->addWidget(fillLbl);
+    m_fillLbl = new QLabel(tr("  Fill: "), this);
+    m_propToolBar->addWidget(m_fillLbl);
 
     m_fillColorBtn = new QPushButton(this);
     m_fillColorBtn->setFixedSize(26, 22);
@@ -278,8 +278,8 @@ void MainWindow::setupToolbars() {
     connect(m_fillColorBtn, &QPushButton::clicked, this, &MainWindow::onSelectFillColor);
     m_propToolBar->addWidget(m_fillColorBtn);
 
-    QLabel* widthLbl = new QLabel(tr("  Width: "), this);
-    m_propToolBar->addWidget(widthLbl);
+    m_widthLbl = new QLabel(tr("  Width: "), this);
+    m_propToolBar->addWidget(m_widthLbl);
 
     m_strokeWidthSpin = new QSpinBox(this);
     m_strokeWidthSpin->setRange(1, 50);
@@ -287,6 +287,17 @@ void MainWindow::setupToolbars() {
     m_strokeWidthSpin->setFixedWidth(60);
     connect(m_strokeWidthSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, &MainWindow::onStrokeWidthChanged);
     m_propToolBar->addWidget(m_strokeWidthSpin);
+
+    m_blurRadiusLbl = new QLabel(tr("  Blur (1-10): "), this);
+    m_propToolBar->addWidget(m_blurRadiusLbl);
+
+    m_blurRadiusSpin = new QSpinBox(this);
+    m_blurRadiusSpin->setRange(1, 10);
+    m_blurRadiusSpin->setValue(5);
+    m_blurRadiusSpin->setFixedWidth(55);
+    m_blurRadiusSpin->setToolTip(tr("Blur intensity from 1 (light) to 10 (heavy redaction)"));
+    connect(m_blurRadiusSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, &MainWindow::onBlurLevelChanged);
+    m_propToolBar->addWidget(m_blurRadiusSpin);
 
     m_propToolBar->addSeparator();
 
@@ -329,6 +340,8 @@ void MainWindow::setupToolbars() {
     m_actBadge = addToolAct("badge", tr("Number / Stepper Badge (1, 2, 3...)"), ToolType::Badge);
     m_actBlur = addToolAct("blur", tr("Blur / Pixelate Redaction"), ToolType::Blur);
     m_actCrop = addToolAct("crop", tr("Crop Tool"), ToolType::Crop);
+
+    updateToolPropertiesVisibility(ToolType::Select);
 }
 
 void MainWindow::setupStatusBar() {
@@ -348,6 +361,7 @@ void MainWindow::addImageTab(const QPixmap& pixmap, const QString& title) {
     scene->setStrokeColor(m_currentStrokeColor);
     scene->setFillColor(m_currentFillColor);
     scene->setStrokeWidth(m_currentStrokeWidth);
+    scene->setBlurLevel(m_currentBlurLevel);
 
     QAction* activeAct = m_toolActionGroup->checkedAction();
     if (activeAct) {
@@ -492,10 +506,23 @@ void MainWindow::onToolTriggered(QAction* action) {
     if (!action) return;
     ToolType tool = static_cast<ToolType>(action->data().toInt());
 
+    updateToolPropertiesVisibility(tool);
+
+    if (tool == ToolType::Highlighter) {
+        if (m_strokeWidthSpin->value() < 10) {
+            m_strokeWidthSpin->setValue(18);
+        }
+    } else if (tool == ToolType::Pen) {
+        if (m_strokeWidthSpin->value() > 10) {
+            m_strokeWidthSpin->setValue(3);
+        }
+    }
+
     for (int i = 0; i < m_tabWidget->count(); ++i) {
         CanvasView* v = qobject_cast<CanvasView*>(m_tabWidget->widget(i));
         if (v && v->canvasScene()) {
             v->canvasScene()->setCurrentTool(tool);
+            v->canvasScene()->setBlurLevel(m_currentBlurLevel);
         }
     }
 }
@@ -528,6 +555,22 @@ void MainWindow::onStrokeWidthChanged(int width) {
     updateToolProperties();
 }
 
+void MainWindow::onBlurLevelChanged(int level) {
+    m_currentBlurLevel = level;
+    for (int i = 0; i < m_tabWidget->count(); ++i) {
+        CanvasView* v = qobject_cast<CanvasView*>(m_tabWidget->widget(i));
+        if (v && v->canvasScene()) {
+            v->canvasScene()->setBlurLevel(level);
+            for (auto* item : v->canvasScene()->selectedItems()) {
+                if (auto* bi = dynamic_cast<BlurItem*>(item)) {
+                    bi->setBlurLevel(level);
+                    bi->updateEffect(v->canvasScene()->basePixmap());
+                }
+            }
+        }
+    }
+}
+
 void MainWindow::onResetBadgeCounter() {
     CanvasScene* scene = currentScene();
     if (scene) {
@@ -543,8 +586,35 @@ void MainWindow::updateToolProperties() {
             v->canvasScene()->setStrokeColor(m_currentStrokeColor);
             v->canvasScene()->setFillColor(m_currentFillColor);
             v->canvasScene()->setStrokeWidth(m_currentStrokeWidth);
+            v->canvasScene()->setBlurLevel(m_currentBlurLevel);
         }
     }
+}
+
+void MainWindow::updateToolPropertiesVisibility(ToolType tool) {
+    bool hasStroke = (tool == ToolType::Pen || tool == ToolType::Highlighter ||
+                      tool == ToolType::Line || tool == ToolType::Arrow ||
+                      tool == ToolType::DoubleArrow || tool == ToolType::Rectangle ||
+                      tool == ToolType::Ellipse || tool == ToolType::Badge ||
+                      tool == ToolType::Text);
+    bool hasFill = (tool == ToolType::Rectangle || tool == ToolType::Ellipse || tool == ToolType::Text);
+    bool hasWidth = (tool == ToolType::Pen || tool == ToolType::Highlighter ||
+                     tool == ToolType::Line || tool == ToolType::Arrow ||
+                     tool == ToolType::DoubleArrow || tool == ToolType::Rectangle ||
+                     tool == ToolType::Ellipse);
+    bool isBadge = (tool == ToolType::Badge);
+    bool isBlur = (tool == ToolType::Blur);
+
+    if (m_strokeLbl) m_strokeLbl->setVisible(hasStroke);
+    if (m_strokeColorBtn) m_strokeColorBtn->setVisible(hasStroke);
+    if (m_fillLbl) m_fillLbl->setVisible(hasFill);
+    if (m_fillColorBtn) m_fillColorBtn->setVisible(hasFill);
+    if (m_widthLbl) m_widthLbl->setVisible(hasWidth);
+    if (m_strokeWidthSpin) m_strokeWidthSpin->setVisible(hasWidth);
+    if (m_resetBadgeBtn) m_resetBadgeBtn->setVisible(isBadge);
+
+    if (m_blurRadiusLbl) m_blurRadiusLbl->setVisible(isBlur);
+    if (m_blurRadiusSpin) m_blurRadiusSpin->setVisible(isBlur);
 }
 
 void MainWindow::onCaptureFullscreen() {

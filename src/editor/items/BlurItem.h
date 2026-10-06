@@ -9,10 +9,13 @@ public:
     enum { Type = UserType + 7 };
     int type() const override { return Type; }
 
-    BlurItem(const QRectF& rect = QRectF(), const QPixmap& sourcePixmap = QPixmap());
+    BlurItem(const QRectF& rect = QRectF(), const QPixmap& sourcePixmap = QPixmap(), int blurLevel = 5);
 
     void setRect(const QRectF& r);
     QRectF rect() const { return m_rect; }
+
+    int blurLevel() const { return m_blurLevel; }
+    void setBlurLevel(int level);
 
     void updateEffect(const QPixmap& sourcePixmap);
 
@@ -20,10 +23,14 @@ public:
     QPainterPath shape() const override;
     void paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget) override;
 
+protected:
+    QVariant itemChange(GraphicsItemChange change, const QVariant& value) override;
+
 private:
-    void generatePixelatedPixmap(const QPixmap& sourcePixmap);
+    void applyBlur(const QPixmap& sourcePixmap);
 
     QRectF m_rect;
-    QPixmap m_pixelatedPixmap;
-    int m_blockSize = 12;
+    QPixmap m_blurredPixmap;
+    QPixmap m_sourceCache;
+    int m_blurLevel = 5;
 };

@@ -12,8 +12,9 @@ PenItem::PenItem(bool isHighlighter)
 
 void PenItem::addPoint(const QPointF& pt) {
     prepareGeometryChange();
-    if (m_path.isEmpty()) {
+    if (m_path.elementCount() == 0) {
         m_path.moveTo(pt);
+        m_path.lineTo(pt + QPointF(0.1, 0.1));
     } else {
         m_path.lineTo(pt);
     }
@@ -40,7 +41,7 @@ void PenItem::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget*
              m_isHighlighter ? Qt::MiterJoin : Qt::RoundJoin);
 
     if (m_isHighlighter) {
-        painter->setCompositionMode(QPainter::CompositionMode_SourceOver);
+        painter->setCompositionMode(QPainter::CompositionMode_Multiply);
     }
 
     painter->setPen(pen);

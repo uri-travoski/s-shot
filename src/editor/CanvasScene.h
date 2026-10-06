@@ -45,6 +45,9 @@ public:
     void setBadgeCounter(int n) { m_badgeCounter = n; }
     void resetBadgeCounter() { m_badgeCounter = 1; }
 
+    int blurLevel() const { return m_blurLevel; }
+    void setBlurLevel(int level) { m_blurLevel = qBound(1, level, 10); }
+
     // Area selection operations
     QRectF selectedArea() const { return m_selectedArea; }
     bool hasAreaSelection() const { return !m_selectedArea.isNull() && m_selectedArea.width() > 2 && m_selectedArea.height() > 2; }
@@ -82,6 +85,7 @@ private:
     int m_strokeWidth = 3;
     QFont m_font = QFont("Sans", 14, QFont::Bold);
     int m_badgeCounter = 1;
+    int m_blurLevel = 5;
 
     // Drawing state
     QPointF m_startPoint;
