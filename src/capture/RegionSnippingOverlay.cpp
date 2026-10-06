@@ -29,11 +29,7 @@ void RegionSnippingOverlay::startSnipping() {
     m_startPos = QPoint();
     m_currentPos = QCursor::pos() - virtualGeo.topLeft();
 
-    if (SettingsManager::instance().magnifierEnabled()) {
-        setCursor(Qt::BlankCursor);
-    } else {
-        setCursor(Qt::CrossCursor);
-    }
+    setCursor(Qt::CrossCursor);
 
     showFullScreen();
     raise();
@@ -97,10 +93,26 @@ void RegionSnippingOverlay::drawMagnifier(QPainter& p, const QPoint& pos) {
     const int diameter = srcSpan * zoomFactor; // 152 pixels
     const int radius = diameter / 2; // 76 pixels
 
-    // Center loupe directly on the cursor position
-    QRect loupeRect(pos.x() - radius, pos.y() - radius, diameter, diameter);
+    // Position loupe offset from the cross (cursor pos) so the cross is outside the circle
+    int offset = 28;
+    int loupeX = pos.x() + offset;
+    int loupeY = pos.y() + offset;
 
-    // Extract 19x19 source pixel region safely with boundary clipping
+    // Flip horizontally if near right screen edge
+    if (loupeX + diameter > width() - 10) {
+        loupeX = pos.x() - offset - diameter;
+    }
+    // Flip vertically if near bottom screen edge (leaving space for badge)
+    if (loupeY + diameter + 35 > height() - 10) {
+        loupeY = pos.y() - offset - diameter;
+    }
+
+    if (loupeX < 8) loupeX = 8;
+    if (loupeY < 8) loupeY = 8;
+
+    QRect loupeRect(loupeX, loupeY, diameter, diameter);
+
+    // Extract 19x19 source pixel region safely with boundary clipping centered at the cross
     QRect srcRect(pos.x() - K, pos.y() - K, srcSpan, srcSpan);
     QRect validScreenRect = srcRect.intersected(m_screenGrab.rect());
 
@@ -123,46 +135,19 @@ void RegionSnippingOverlay::drawMagnifier(QPainter& p, const QPoint& pos) {
 
     p.drawPixmap(loupeRect.topLeft(), zoomPix);
 
-    // If actively dragging a selection, dim unselected pixels and draw selection boundary inside loupe
-    if (m_isSelecting && !m_selectedRect.isNull() && m_selectedRect.isValid()) {
-        int selLeft = loupeRect.left() + (m_selectedRect.left() - srcRect.left()) * zoomFactor;
-        int selTop  = loupeRect.top()  + (m_selectedRect.top()  - srcRect.top()) * zoomFactor;
-        int selW    = m_selectedRect.width() * zoomFactor;
-        int selH    = m_selectedRect.height() * zoomFactor;
-        QRect zoomedSelRect(selLeft, selTop, selW, selH);
-
-        QPainterPath unselectedPath;
-        unselectedPath.addEllipse(loupeRect);
-        QPainterPath selPath;
-        selPath.addRect(zoomedSelRect);
-        QPainterPath dimPath = unselectedPath.subtracted(selPath);
-        p.fillPath(dimPath, QColor(0, 0, 0, 110));
-
-        p.setPen(QPen(QColor(48, 229, 0), 2, Qt::SolidLine));
-        p.setBrush(Qt::NoBrush);
-        p.drawRect(zoomedSelRect);
-    }
-
     // 2. Pixel grid
-    p.setPen(QPen(QColor(255, 255, 255, 35), 1));
+    p.setPen(QPen(QColor(255, 255, 255, 30), 1));
     for (int i = 0; i <= diameter; i += zoomFactor) {
         p.drawLine(loupeRect.left() + i, loupeRect.top(), loupeRect.left() + i, loupeRect.bottom());
         p.drawLine(loupeRect.left(), loupeRect.top() + i, loupeRect.right(), loupeRect.top() + i);
     }
 
-    // 3. Precision reticle & center pixel highlight
-    QRect centerPixelRect(pos.x() - zoomFactor / 2, pos.y() - zoomFactor / 2, zoomFactor, zoomFactor);
+    // 3. Highlight the center target pixel (exact pixel directly at the cross)
+    int centerLoupeX = loupeRect.left() + radius;
+    int centerLoupeY = loupeRect.top() + radius;
+    QRect centerPixelRect(centerLoupeX - zoomFactor / 2, centerLoupeY - zoomFactor / 2, zoomFactor, zoomFactor);
 
     p.setPen(QPen(QColor(48, 229, 0, 220), 1.5));
-    // Horizontal crosshair lines
-    p.drawLine(loupeRect.left(), pos.y(), centerPixelRect.left(), pos.y());
-    p.drawLine(centerPixelRect.right() + 1, pos.y(), loupeRect.right(), pos.y());
-    // Vertical crosshair lines
-    p.drawLine(pos.x(), loupeRect.top(), pos.x(), centerPixelRect.top());
-    p.drawLine(pos.x(), centerPixelRect.bottom() + 1, pos.x(), loupeRect.bottom());
-
-    // Highlight center target pixel box
-    p.setPen(QPen(QColor(48, 229, 0), 1.5));
     p.setBrush(Qt::NoBrush);
     p.drawRect(centerPixelRect);
 
@@ -197,13 +182,13 @@ void RegionSnippingOverlay::drawMagnifier(QPainter& p, const QPoint& pos) {
     int badgeW = fm.horizontalAdvance(infoText) + 30;
     int badgeH = 22;
 
-    int badgeX = pos.x() - badgeW / 2;
+    int badgeX = loupeRect.center().x() - badgeW / 2;
     if (badgeX < 6) badgeX = 6;
     if (badgeX + badgeW > width() - 6) badgeX = width() - badgeW - 6;
 
-    int badgeY = pos.y() + radius + 10;
+    int badgeY = loupeRect.bottom() + 8;
     if (badgeY + badgeH > height() - 8) {
-        badgeY = pos.y() - radius - badgeH - 10;
+        badgeY = loupeRect.top() - badgeH - 8;
     }
 
     QRect badgeRect(badgeX, badgeY, badgeW, badgeH);
