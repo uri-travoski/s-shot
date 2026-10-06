@@ -3,6 +3,7 @@
 #include "../capture/CaptureManager.h"
 #include "../dialogs/SettingsDialog.h"
 #include "../dialogs/AboutDialog.h"
+#include "../core/SettingsManager.h"
 #include <QApplication>
 #include <QIcon>
 #include <QStyle>
@@ -18,6 +19,7 @@ TrayManager::TrayManager(std::function<MainWindow*()> getMainWindowFunc, QObject
     createTrayMenu();
 
     connect(m_trayIcon, &QSystemTrayIcon::activated, this, &TrayManager::onTrayActivated);
+    connect(&SettingsManager::instance(), &SettingsManager::themeChanged, this, &TrayManager::updateMenuTheme);
 }
 
 TrayManager::~TrayManager() {
@@ -40,36 +42,72 @@ void TrayManager::showMessage(const QString& title, const QString& message, QSys
 
 void TrayManager::createTrayMenu() {
     m_trayMenu = new QMenu();
-    m_trayMenu->setStyleSheet(
-        "QMenu { background-color: #2b2b2b; color: #ffffff; border: 1px solid #444; padding: 4px; }"
-        "QMenu::item { padding: 6px 24px 6px 24px; border-radius: 3px; }"
-        "QMenu::item:selected { background-color: #2e7d32; color: #ffffff; }"
-        "QMenu::separator { height: 1px; background-color: #444; margin: 4px 8px; }"
-    );
 
-    QAction* actOpen = m_trayMenu->addAction(QIcon(":/icons/open.svg"), tr("Open"), this, &TrayManager::onOpenImage);
-    actOpen->setToolTip(tr("Open an existing image in annotation editor"));
+    // Group 1: Open & Editor
+    m_actOpen = m_trayMenu->addAction(QIcon(":/icons/open.svg"), tr("Open"), this, &TrayManager::onOpenImage);
+    m_actOpen->setToolTip(tr("Open an existing image in annotation editor"));
 
-    QAction* actEditor = m_trayMenu->addAction(QIcon(":/icons/new.svg"), tr("Editor"), this, &TrayManager::onOpenEditor);
-    actEditor->setToolTip(tr("Open annotation editor"));
+    m_actEditor = m_trayMenu->addAction(QIcon(":/icons/editor.svg"), tr("Editor"), this, &TrayManager::onOpenEditor);
+    m_actEditor->setToolTip(tr("Open annotation editor"));
 
+    // Divider 1
     m_trayMenu->addSeparator();
 
-    m_trayMenu->addAction(tr("Capture Fullscreen"), this, &TrayManager::onCaptureFullscreen);
-    m_trayMenu->addAction(tr("Capture Selected Region"), this, &TrayManager::onCaptureRegion);
-    m_trayMenu->addAction(tr("Capture Scrolling Window"), this, &TrayManager::onCaptureScrolling);
-    m_trayMenu->addAction(tr("Colour Picker"), this, &TrayManager::onColorPicker);
+    // Group 2: Capture Actions
+    m_actFullscreen = m_trayMenu->addAction(QIcon(":/icons/fullscreen.svg"), tr("Capture Fullscreen"), this, &TrayManager::onCaptureFullscreen);
+    m_actRegion = m_trayMenu->addAction(QIcon(":/icons/snip.svg"), tr("Capture Selected Region"), this, &TrayManager::onCaptureRegion);
+    m_actScrolling = m_trayMenu->addAction(QIcon(":/icons/scroll.svg"), tr("Capture Scrolling Window"), this, &TrayManager::onCaptureScrolling);
+    m_actColorPicker = m_trayMenu->addAction(QIcon(":/icons/picker.svg"), tr("Colour Picker"), this, &TrayManager::onColorPicker);
 
+    // Divider 2
     m_trayMenu->addSeparator();
 
-    m_trayMenu->addAction(tr("Settings"), this, &TrayManager::onOpenSettings);
-    m_trayMenu->addAction(tr("About"), this, &TrayManager::onOpenAbout);
+    // Group 3: Settings & About
+    m_actSettings = m_trayMenu->addAction(QIcon(":/icons/settings.svg"), tr("Settings"), this, &TrayManager::onOpenSettings);
+    m_actAbout = m_trayMenu->addAction(QIcon(":/icons/about.svg"), tr("About"), this, &TrayManager::onOpenAbout);
 
+    // Divider 3
     m_trayMenu->addSeparator();
 
-    m_trayMenu->addAction(tr("Quit"), this, &TrayManager::onQuit);
+    // Group 4: Quit
+    m_actQuit = m_trayMenu->addAction(QIcon(":/icons/quit.svg"), tr("Quit"), this, &TrayManager::onQuit);
 
     m_trayIcon->setContextMenu(m_trayMenu);
+
+    updateMenuTheme(SettingsManager::instance().theme());
+}
+
+void TrayManager::updateMenuTheme(const QString& theme) {
+    bool isLight = (theme == "Light");
+    QString prefix = isLight ? ":/icons/light/" : ":/icons/";
+
+    if (m_actOpen) m_actOpen->setIcon(QIcon(prefix + "open.svg"));
+    if (m_actEditor) m_actEditor->setIcon(QIcon(prefix + "editor.svg"));
+    if (m_actFullscreen) m_actFullscreen->setIcon(QIcon(prefix + "fullscreen.svg"));
+    if (m_actRegion) m_actRegion->setIcon(QIcon(prefix + "snip.svg"));
+    if (m_actScrolling) m_actScrolling->setIcon(QIcon(prefix + "scroll.svg"));
+    if (m_actColorPicker) m_actColorPicker->setIcon(QIcon(prefix + "picker.svg"));
+    if (m_actSettings) m_actSettings->setIcon(QIcon(prefix + "settings.svg"));
+    if (m_actAbout) m_actAbout->setIcon(QIcon(prefix + "about.svg"));
+    if (m_actQuit) m_actQuit->setIcon(QIcon(prefix + "quit.svg"));
+
+    if (m_trayMenu) {
+        if (isLight) {
+            m_trayMenu->setStyleSheet(
+                "QMenu { background-color: #e2e2e2; color: #222222; border: 1px solid #b5b5b5; padding: 4px; }"
+                "QMenu::item { padding: 6px 24px 6px 10px; border-radius: 4px; }"
+                "QMenu::item:selected { background-color: #2e7d32; color: #ffffff; }"
+                "QMenu::separator { height: 1px; background-color: #cccccc; margin: 4px 8px; }"
+            );
+        } else {
+            m_trayMenu->setStyleSheet(
+                "QMenu { background-color: #2b2b2b; color: #ffffff; border: 1px solid #444444; padding: 4px; }"
+                "QMenu::item { padding: 6px 24px 6px 10px; border-radius: 4px; }"
+                "QMenu::item:selected { background-color: #2e7d32; color: #ffffff; }"
+                "QMenu::separator { height: 1px; background-color: #444444; margin: 4px 8px; }"
+            );
+        }
+    }
 }
 
 void TrayManager::onTrayActivated(QSystemTrayIcon::ActivationReason reason) {

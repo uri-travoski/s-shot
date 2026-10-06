@@ -23,7 +23,7 @@ void SettingsManager::load() {
     m_autoCopyToClipboard = s.value("autoCopyToClipboard", true).toBool();
     m_openEditorAfterCapture = s.value("openEditorAfterCapture", true).toBool();
     m_runInTrayOnClose = s.value("runInTrayOnClose", true).toBool();
-    m_theme = s.value("theme", "Dark").toString();
+    m_theme = s.value("theme", "Light").toString();
 
     m_hotkeyFullscreen = s.value("hotkeyFullscreen", "Ctrl+Shift+Print").toString();
     m_hotkeyRegion = s.value("hotkeyRegion", "Ctrl+Print").toString();

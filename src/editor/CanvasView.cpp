@@ -20,16 +20,19 @@ CanvasView::CanvasView(CanvasScene* scene, QWidget* parent)
 
     m_copyBtn = new QPushButton(tr("📋 Copy"), m_areaActionWidget);
     m_cutBtn = new QPushButton(tr("✂ Cut"), m_areaActionWidget);
+    m_moveBtn = new QPushButton(tr("✥ Move"), m_areaActionWidget);
     m_deleteBtn = new QPushButton(tr("🗑 Delete"), m_areaActionWidget);
     m_cropBtn = new QPushButton(tr("⛶ Crop"), m_areaActionWidget);
 
     connect(m_copyBtn, &QPushButton::clicked, m_scene, &CanvasScene::copySelectedArea);
     connect(m_cutBtn, &QPushButton::clicked, m_scene, &CanvasScene::cutSelectedArea);
+    connect(m_moveBtn, &QPushButton::clicked, m_scene, &CanvasScene::moveSelectedArea);
     connect(m_deleteBtn, &QPushButton::clicked, m_scene, &CanvasScene::deleteSelectedArea);
     connect(m_cropBtn, &QPushButton::clicked, m_scene, &CanvasScene::cropToSelectedArea);
 
     actLayout->addWidget(m_copyBtn);
     actLayout->addWidget(m_cutBtn);
+    actLayout->addWidget(m_moveBtn);
     actLayout->addWidget(m_deleteBtn);
     actLayout->addWidget(m_cropBtn);
 

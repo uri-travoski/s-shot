@@ -29,6 +29,12 @@ void RegionSnippingOverlay::startSnipping() {
     m_startPos = QPoint();
     m_currentPos = QCursor::pos() - virtualGeo.topLeft();
 
+    if (SettingsManager::instance().magnifierEnabled()) {
+        setCursor(Qt::BlankCursor);
+    } else {
+        setCursor(Qt::CrossCursor);
+    }
+
     showFullScreen();
     raise();
     activateWindow();
@@ -85,67 +91,111 @@ void RegionSnippingOverlay::paintEvent(QPaintEvent*) {
 }
 
 void RegionSnippingOverlay::drawMagnifier(QPainter& p, const QPoint& pos) {
-    int loupeSize = 130;
-    int zoomFactor = 6;
-    int srcSize = loupeSize / zoomFactor; // ~21 pixels
+    const int diameter = 144;
+    const int radius = diameter / 2;
+    const int zoomFactor = 8;
+    const int srcSpan = diameter / zoomFactor; // 18 pixels
 
-    // Position loupe offset from cursor
-    int offsetX = 25;
-    int offsetY = 25;
-    if (pos.x() + offsetX + loupeSize > width()) {
-        offsetX = -loupeSize - 25;
+    // Center loupe directly on the cursor position
+    QRect loupeRect(pos.x() - radius, pos.y() - radius, diameter, diameter);
+
+    // Extract 18x18 source pixel region safely
+    int srcX = pos.x() - srcSpan / 2;
+    int srcY = pos.y() - srcSpan / 2;
+
+    QImage srcImg(srcSpan, srcSpan, QImage::Format_ARGB32_Premultiplied);
+    srcImg.fill(Qt::black);
+    {
+        QPainter pSrc(&srcImg);
+        pSrc.drawPixmap(0, 0, m_screenGrab, srcX, srcY, srcSpan, srcSpan);
     }
-    if (pos.y() + offsetY + loupeSize > height()) {
-        offsetY = -loupeSize - 25;
-    }
+    QPixmap zoomPix = QPixmap::fromImage(srcImg).scaled(diameter, diameter, Qt::IgnoreAspectRatio, Qt::FastTransformation);
 
-    QRect loupeRect(pos.x() + offsetX, pos.y() + offsetY, loupeSize, loupeSize);
-
-    // Extract source pixel region
-    QRect srcRect(pos.x() - srcSize / 2, pos.y() - srcSize / 2, srcSize, srcSize);
-    QPixmap zoomPix = m_screenGrab.copy(srcRect).scaled(loupeSize, loupeSize, Qt::KeepAspectRatio, Qt::FastTransformation);
-
-    // Draw loupe background and frame
+    // 1. Draw circular magnified view
     p.save();
-    QPainterPath path;
-    path.addRoundedRect(loupeRect, 8, 8);
-    p.setClipPath(path);
+    QPainterPath circlePath;
+    circlePath.addEllipse(loupeRect);
+    p.setClipPath(circlePath);
 
     p.drawPixmap(loupeRect.topLeft(), zoomPix);
 
-    // Center crosshair
-    QPoint center = loupeRect.center();
-    p.setPen(QPen(QColor(48, 229, 0, 200), 1));
-    p.drawLine(center.x() - 10, center.y(), center.x() + 10, center.y());
-    p.drawLine(center.x(), center.y() - 10, center.x(), center.y() + 10);
+    // 2. Pixel grid
+    p.setPen(QPen(QColor(255, 255, 255, 35), 1));
+    for (int i = 0; i <= diameter; i += zoomFactor) {
+        p.drawLine(loupeRect.left() + i, loupeRect.top(), loupeRect.left() + i, loupeRect.bottom());
+        p.drawLine(loupeRect.left(), loupeRect.top() + i, loupeRect.right(), loupeRect.top() + i);
+    }
+
+    // 3. Precision reticle & center pixel highlight
+    QRect centerPixelRect(pos.x() - zoomFactor / 2, pos.y() - zoomFactor / 2, zoomFactor, zoomFactor);
+
+    p.setPen(QPen(QColor(48, 229, 0, 220), 1.5));
+    // Horizontal crosshair lines
+    p.drawLine(loupeRect.left(), pos.y(), centerPixelRect.left(), pos.y());
+    p.drawLine(centerPixelRect.right() + 1, pos.y(), loupeRect.right(), pos.y());
+    // Vertical crosshair lines
+    p.drawLine(pos.x(), loupeRect.top(), pos.x(), centerPixelRect.top());
+    p.drawLine(pos.x(), centerPixelRect.bottom() + 1, pos.x(), loupeRect.bottom());
+
+    // Highlight center target pixel box
+    p.setPen(QPen(QColor(48, 229, 0), 1.5));
+    p.setBrush(Qt::NoBrush);
+    p.drawRect(centerPixelRect);
+
     p.restore();
 
-    // Border
-    p.setPen(QPen(QColor(48, 229, 0), 2));
+    // 4. Circular Bezel Ring
+    p.setPen(QPen(QColor(0, 0, 0, 180), 3.5));
     p.setBrush(Qt::NoBrush);
-    p.drawRoundedRect(loupeRect, 8, 8);
+    p.drawEllipse(loupeRect.adjusted(-1, -1, 1, 1));
 
-    // Color readout badge
-    QColor curColor = m_screenGrab.toImage().pixelColor(qBound(0, pos.x(), m_screenGrab.width() - 1),
-                                                         qBound(0, pos.y(), m_screenGrab.height() - 1));
-    QString colText = curColor.name().toUpper();
+    p.setPen(QPen(QColor(48, 229, 0), 2.5));
+    p.drawEllipse(loupeRect);
 
-    QRect badgeRect(loupeRect.left(), loupeRect.bottom() + 3, loupeRect.width(), 20);
-    p.setBrush(QColor(15, 15, 15, 230));
-    p.setPen(QPen(QColor(80, 80, 80), 1));
-    p.drawRoundedRect(badgeRect, 3, 3);
+    // 5. Smart Readout Badge (Color, Coordinates & Dimensions)
+    int px = qBound(0, pos.x(), m_screenGrab.width() - 1);
+    int py = qBound(0, pos.y(), m_screenGrab.height() - 1);
+    QColor curColor = m_screenGrab.toImage().pixelColor(px, py);
+    QString hexText = curColor.name(QColor::HexRgb).toUpper();
 
-    // Color preview swatch inside badge
-    QRect swatch(badgeRect.left() + 4, badgeRect.top() + 4, 12, 12);
-    p.fillRect(swatch, curColor);
-    p.drawRect(swatch);
+    QString infoText;
+    if (m_isSelecting && !m_selectedRect.isNull()) {
+        infoText = QString("%1  (%2, %3)  [%4 × %5]").arg(hexText).arg(pos.x()).arg(pos.y()).arg(m_selectedRect.width()).arg(m_selectedRect.height());
+    } else {
+        infoText = QString("%1  (%2, %3)").arg(hexText).arg(pos.x()).arg(pos.y());
+    }
 
-    QFont font = p.font();
-    font.setPixelSize(10);
-    font.setBold(true);
-    p.setFont(font);
+    QFont f = p.font();
+    f.setPixelSize(11);
+    f.setBold(true);
+    p.setFont(f);
+    QFontMetrics fm(f);
+    int badgeW = fm.horizontalAdvance(infoText) + 30;
+    int badgeH = 22;
+
+    int badgeX = pos.x() - badgeW / 2;
+    if (badgeX < 6) badgeX = 6;
+    if (badgeX + badgeW > width() - 6) badgeX = width() - badgeW - 6;
+
+    int badgeY = pos.y() + radius + 10;
+    if (badgeY + badgeH > height() - 8) {
+        badgeY = pos.y() - radius - badgeH - 10;
+    }
+
+    QRect badgeRect(badgeX, badgeY, badgeW, badgeH);
+    p.setBrush(QColor(20, 20, 20, 230));
+    p.setPen(QPen(QColor(48, 229, 0), 1));
+    p.drawRoundedRect(badgeRect, 4, 4);
+
+    // Swatch inside badge
+    QRect swatchRect(badgeRect.left() + 5, badgeRect.top() + 4, 14, 14);
+    p.fillRect(swatchRect, curColor);
+    p.setPen(QColor(180, 180, 180));
+    p.drawRect(swatchRect);
+
+    // Text
     p.setPen(Qt::white);
-    p.drawText(badgeRect.adjusted(20, 0, 0, 0), Qt::AlignCenter, QString("%1  (%2,%3)").arg(colText).arg(pos.x()).arg(pos.y()));
+    p.drawText(badgeRect.adjusted(24, 0, -4, 0), Qt::AlignVCenter | Qt::AlignLeft, infoText);
 }
 
 void RegionSnippingOverlay::mousePressEvent(QMouseEvent* event) {
@@ -158,6 +208,7 @@ void RegionSnippingOverlay::mousePressEvent(QMouseEvent* event) {
         update();
     } else if (event->button() == Qt::RightButton) {
         // Cancel on right click
+        setCursor(Qt::ArrowCursor);
         hide();
         emit snippingCancelled();
     }
@@ -180,6 +231,7 @@ void RegionSnippingOverlay::mouseReleaseEvent(QMouseEvent* event) {
         // Minimum threshold of 4x4 px to avoid accidental zero-size clicks
         if (m_selectedRect.width() > 4 && m_selectedRect.height() > 4) {
             m_selectionDone = true;
+            setCursor(Qt::ArrowCursor);
             hide();
             QPixmap cropped = m_screenGrab.copy(m_selectedRect);
             emit regionCaptured(cropped);
@@ -192,9 +244,11 @@ void RegionSnippingOverlay::mouseReleaseEvent(QMouseEvent* event) {
 
 void RegionSnippingOverlay::keyPressEvent(QKeyEvent* event) {
     if (event->key() == Qt::Key_Escape) {
+        setCursor(Qt::ArrowCursor);
         hide();
         emit snippingCancelled();
     } else if ((event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) && !m_selectedRect.isNull()) {
+        setCursor(Qt::ArrowCursor);
         hide();
         QPixmap cropped = m_screenGrab.copy(m_selectedRect);
         emit regionCaptured(cropped);

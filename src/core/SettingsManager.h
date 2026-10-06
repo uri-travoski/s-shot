@@ -77,7 +77,7 @@ private:
     bool m_autoCopyToClipboard = true;
     bool m_openEditorAfterCapture = true;
     bool m_runInTrayOnClose = true;
-    QString m_theme = "Dark";
+    QString m_theme = "Light";
 
     QString m_hotkeyFullscreen = "Ctrl+Shift+Print";
     QString m_hotkeyRegion = "Ctrl+Print";

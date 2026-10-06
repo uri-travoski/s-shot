@@ -146,6 +146,38 @@ void CanvasScene::cutSelectedArea() {
     deleteSelectedArea();
 }
 
+void CanvasScene::moveSelectedArea() {
+    if (!hasAreaSelection()) return;
+    QRect cropRect = m_selectedArea.toRect().intersected(m_basePixmapItem->pixmap().rect());
+    if (cropRect.width() < 2 || cropRect.height() < 2) return;
+
+    QPixmap patch = m_basePixmapItem->pixmap().copy(cropRect);
+
+    // Clear the selected area from base pixmap
+    QPixmap oldPix = m_basePixmapItem->pixmap();
+    QPixmap newPix = oldPix;
+    QPainter p(&newPix);
+    p.setCompositionMode(QPainter::CompositionMode_Clear);
+    p.fillRect(cropRect, Qt::transparent);
+    p.end();
+
+    QGraphicsPixmapItem* floatingPatch = new QGraphicsPixmapItem(patch);
+    floatingPatch->setFlags(QGraphicsItem::ItemIsMovable | QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemSendsGeometryChanges);
+    floatingPatch->setCursor(Qt::SizeAllCursor);
+    floatingPatch->setPos(cropRect.topLeft());
+    floatingPatch->setZValue(1.0);
+
+    m_undoStack.beginMacro("Move Area");
+    m_undoStack.push(new ModifyPixmapCommand(this, oldPix, newPix, "Clear Moved Area"));
+    m_undoStack.push(new AddItemCommand(this, floatingPatch));
+    m_undoStack.endMacro();
+
+    clearSelection();
+    floatingPatch->setSelected(true);
+    clearAreaSelection();
+    emit sceneModified();
+}
+
 void CanvasScene::deleteSelectedArea() {
     if (!hasAreaSelection()) return;
     QPixmap oldPix = m_basePixmapItem->pixmap();

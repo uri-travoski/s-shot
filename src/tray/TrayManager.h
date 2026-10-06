@@ -31,9 +31,20 @@ private slots:
 
 private:
     void createTrayMenu();
+    void updateMenuTheme(const QString& theme);
     MainWindow* mainWindow();
 
     std::function<MainWindow*()> m_getMainWindow;
     QSystemTrayIcon* m_trayIcon = nullptr;
     QMenu* m_trayMenu = nullptr;
+
+    QAction* m_actOpen = nullptr;
+    QAction* m_actEditor = nullptr;
+    QAction* m_actFullscreen = nullptr;
+    QAction* m_actRegion = nullptr;
+    QAction* m_actScrolling = nullptr;
+    QAction* m_actColorPicker = nullptr;
+    QAction* m_actSettings = nullptr;
+    QAction* m_actAbout = nullptr;
+    QAction* m_actQuit = nullptr;
 };

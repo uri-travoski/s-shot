@@ -48,6 +48,7 @@ private:
     QWidget* m_areaActionWidget = nullptr;
     QPushButton* m_copyBtn = nullptr;
     QPushButton* m_cutBtn = nullptr;
+    QPushButton* m_moveBtn = nullptr;
     QPushButton* m_deleteBtn = nullptr;
     QPushButton* m_cropBtn = nullptr;
     QRectF m_currentArea;

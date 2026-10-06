@@ -52,6 +52,7 @@ public:
 
     void copySelectedArea();
     void cutSelectedArea();
+    void moveSelectedArea();
     void deleteSelectedArea();
     void cropToArea(const QRectF& rect);
     void cropToSelectedArea();
