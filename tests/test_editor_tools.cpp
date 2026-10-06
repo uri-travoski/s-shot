@@ -9,6 +9,7 @@
 #include "editor/items/ArrowItem.h"
 #include "editor/items/ShapeItem.h"
 #include "editor/items/BadgeItem.h"
+#include "editor/items/TextItem.h"
 
 class TestScene : public CanvasScene {
 public:
@@ -30,6 +31,8 @@ private slots:
     void testCanvasSceneToolIntegration();
     void testCanvasSceneAreaSelectionAndCrop();
     void testCanvasSceneUndoRedo();
+    void testTextItemMultiLineAndBackground();
+    void testCanvasSceneTextCreation();
 };
 
 void TestEditorTools::initTestCase() {
@@ -294,6 +297,92 @@ void TestEditorTools::testCanvasSceneUndoRedo() {
     QVERIFY(scene.undoStack()->canRedo());
     scene.undoStack()->redo();
     QCOMPARE(scene.items().count(), countAfterAdd);
+}
+
+void TestEditorTools::testTextItemMultiLineAndBackground() {
+    TextItem item;
+    // Verify default transparent background
+    QCOMPARE(item.fillColor(), Qt::transparent);
+
+    // Multi-line text support
+    item.setText("Line 1\nLine 2\nLine 3");
+    QCOMPARE(item.text(), QString("Line 1\nLine 2\nLine 3"));
+
+    // Changing colors
+    item.setStrokeColor(QColor(0, 0, 255));
+    QCOMPARE(item.strokeColor(), QColor(0, 0, 255));
+    item.setFillColor(QColor(255, 255, 0, 180));
+    QCOMPARE(item.fillColor(), QColor(255, 255, 0, 180));
+
+    // Paint to QImage to verify rendering with background
+    QImage target(200, 100, QImage::Format_ARGB32_Premultiplied);
+    target.fill(Qt::white);
+    QPainter p(&target);
+    QStyleOptionGraphicsItem opt;
+    item.paint(&p, &opt, nullptr);
+    p.end();
+
+    // Verify pixels were drawn
+    bool foundYellow = false;
+    for (int y = 0; y < target.height(); ++y) {
+        for (int x = 0; x < target.width(); ++x) {
+            QRgb c = target.pixel(x, y);
+            if (qRed(c) > 200 && qGreen(c) > 200 && qBlue(c) < 100) {
+                foundYellow = true;
+                break;
+            }
+        }
+        if (foundYellow) break;
+    }
+    QVERIFY(foundYellow);
+}
+
+void TestEditorTools::testCanvasSceneTextCreation() {
+    TestScene scene;
+    QPixmap base(300, 300);
+    base.fill(Qt::white);
+    scene.setBasePixmap(base);
+
+    scene.setCurrentTool(ToolType::Text);
+    scene.setStrokeColor(QColor(255, 0, 0));
+    scene.setFillColor(Qt::transparent);
+
+    QGraphicsSceneMouseEvent pressEv(QEvent::GraphicsSceneMousePress);
+    pressEv.setButton(Qt::LeftButton);
+    pressEv.setScenePos(QPointF(50, 50));
+    scene.mousePressEvent(&pressEv);
+
+    // Should have created a TextItem in scene
+    TextItem* created = nullptr;
+    for (auto* item : scene.items()) {
+        if (auto* txt = dynamic_cast<TextItem*>(item)) {
+            created = txt;
+            break;
+        }
+    }
+    QVERIFY(created != nullptr);
+    QVERIFY(created->isEditing());
+
+    // Type text and finish editing
+    created->setText("Hello Multi-line\nWorld!");
+    created->finishEditing();
+    QVERIFY(!created->isEditing());
+
+    // Undo should remove it, Redo should restore it
+    QVERIFY(scene.undoStack()->canUndo());
+    scene.undoStack()->undo();
+    bool foundAfterUndo = false;
+    for (auto* item : scene.items()) {
+        if (dynamic_cast<TextItem*>(item)) foundAfterUndo = true;
+    }
+    QVERIFY(!foundAfterUndo);
+
+    scene.undoStack()->redo();
+    bool foundAfterRedo = false;
+    for (auto* item : scene.items()) {
+        if (dynamic_cast<TextItem*>(item)) foundAfterRedo = true;
+    }
+    QVERIFY(foundAfterRedo);
 }
 
 int main(int argc, char** argv) {

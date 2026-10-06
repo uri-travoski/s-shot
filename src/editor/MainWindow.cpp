@@ -260,36 +260,41 @@ void MainWindow::setupToolbars() {
     m_propToolBar->setMovable(false);
 
     m_strokeLbl = new QLabel(tr(" Stroke: "), this);
-    m_propToolBar->addWidget(m_strokeLbl);
+    m_actStrokeLbl = m_propToolBar->addWidget(m_strokeLbl);
 
     m_strokeColorBtn = new QPushButton(this);
     m_strokeColorBtn->setFixedSize(26, 22);
     m_strokeColorBtn->setStyleSheet("background-color: #ff1e1e; border: 1px solid #888; border-radius: 3px;");
     connect(m_strokeColorBtn, &QPushButton::clicked, this, &MainWindow::onSelectStrokeColor);
-    m_propToolBar->addWidget(m_strokeColorBtn);
+    m_actStrokeColorBtn = m_propToolBar->addWidget(m_strokeColorBtn);
 
     m_fillLbl = new QLabel(tr("  Fill: "), this);
-    m_propToolBar->addWidget(m_fillLbl);
+    m_actFillLbl = m_propToolBar->addWidget(m_fillLbl);
 
     m_fillColorBtn = new QPushButton(this);
     m_fillColorBtn->setFixedSize(26, 22);
     m_fillColorBtn->setText("Ø");
     m_fillColorBtn->setStyleSheet("background-color: #888; color: #eee; border: 1px solid #666; border-radius: 3px; font-weight: bold;");
     connect(m_fillColorBtn, &QPushButton::clicked, this, &MainWindow::onSelectFillColor);
-    m_propToolBar->addWidget(m_fillColorBtn);
+    m_actFillColorBtn = m_propToolBar->addWidget(m_fillColorBtn);
+
+    m_fontBtn = new QPushButton(tr("Font..."), this);
+    m_fontBtn->setStyleSheet("padding: 2px 6px; border: 1px solid #888; border-radius: 3px; font-size: 11px;");
+    connect(m_fontBtn, &QPushButton::clicked, this, &MainWindow::onSelectFont);
+    m_actFontBtn = m_propToolBar->addWidget(m_fontBtn);
 
     m_widthLbl = new QLabel(tr("  Width: "), this);
-    m_propToolBar->addWidget(m_widthLbl);
+    m_actWidthLbl = m_propToolBar->addWidget(m_widthLbl);
 
     m_strokeWidthSpin = new QSpinBox(this);
     m_strokeWidthSpin->setRange(1, 50);
     m_strokeWidthSpin->setValue(3);
     m_strokeWidthSpin->setFixedWidth(60);
     connect(m_strokeWidthSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, &MainWindow::onStrokeWidthChanged);
-    m_propToolBar->addWidget(m_strokeWidthSpin);
+    m_actStrokeWidthSpin = m_propToolBar->addWidget(m_strokeWidthSpin);
 
     m_blurRadiusLbl = new QLabel(tr("  Blur (1-10): "), this);
-    m_propToolBar->addWidget(m_blurRadiusLbl);
+    m_actBlurRadiusLbl = m_propToolBar->addWidget(m_blurRadiusLbl);
 
     m_blurRadiusSpin = new QSpinBox(this);
     m_blurRadiusSpin->setRange(1, 10);
@@ -297,14 +302,14 @@ void MainWindow::setupToolbars() {
     m_blurRadiusSpin->setFixedWidth(55);
     m_blurRadiusSpin->setToolTip(tr("Blur intensity from 1 (light) to 10 (heavy redaction)"));
     connect(m_blurRadiusSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, &MainWindow::onBlurLevelChanged);
-    m_propToolBar->addWidget(m_blurRadiusSpin);
+    m_actBlurRadiusSpin = m_propToolBar->addWidget(m_blurRadiusSpin);
 
-    m_propToolBar->addSeparator();
+    m_actBadgeSeparator = m_propToolBar->addSeparator();
 
     m_resetBadgeBtn = new QPushButton(tr("Reset Stepper (1)"), this);
     m_resetBadgeBtn->setStyleSheet("padding: 2px 6px; border: 1px solid #888; border-radius: 3px; font-size: 11px;");
     connect(m_resetBadgeBtn, &QPushButton::clicked, this, &MainWindow::onResetBadgeCounter);
-    m_propToolBar->addWidget(m_resetBadgeBtn);
+    m_actResetBadgeBtn = m_propToolBar->addWidget(m_resetBadgeBtn);
 
     // 3. Left Vertical Toolbar (Annotation Tools - ksnip style)
     m_leftToolBar = new QToolBar(tr("Tools"), this);
@@ -362,6 +367,7 @@ void MainWindow::addImageTab(const QPixmap& pixmap, const QString& title) {
     scene->setFillColor(m_currentFillColor);
     scene->setStrokeWidth(m_currentStrokeWidth);
     scene->setBlurLevel(m_currentBlurLevel);
+    scene->setCurrentFont(m_currentFont);
 
     QAction* activeAct = m_toolActionGroup->checkedAction();
     if (activeAct) {
@@ -528,16 +534,29 @@ void MainWindow::onToolTriggered(QAction* action) {
 }
 
 void MainWindow::onSelectStrokeColor() {
-    QColor c = QColorDialog::getColor(m_currentStrokeColor, this, tr("Select Stroke Color"));
+    QColor c = QColorDialog::getColor(m_currentStrokeColor, this, tr("Select Color"));
     if (c.isValid()) {
         m_currentStrokeColor = c;
         m_strokeColorBtn->setStyleSheet(QString("background-color: %1; border: 1px solid #888; border-radius: 3px;").arg(c.name()));
         updateToolProperties();
+        if (CanvasScene* scene = currentScene()) {
+            for (auto* item : scene->selectedItems()) {
+                if (auto* txt = dynamic_cast<TextItem*>(item)) {
+                    txt->setStrokeColor(c);
+                } else if (auto* pen = dynamic_cast<PenItem*>(item)) {
+                    pen->setStrokeColor(c);
+                } else if (auto* arrow = dynamic_cast<ArrowItem*>(item)) {
+                    arrow->setStrokeColor(c);
+                } else if (auto* shape = dynamic_cast<ShapeItem*>(item)) {
+                    shape->setStrokeColor(c);
+                }
+            }
+        }
     }
 }
 
 void MainWindow::onSelectFillColor() {
-    QColor c = QColorDialog::getColor(m_currentFillColor.isValid() ? m_currentFillColor : Qt::white, this, tr("Select Fill Color"), QColorDialog::ShowAlphaChannel);
+    QColor c = QColorDialog::getColor(m_currentFillColor.isValid() && m_currentFillColor != Qt::transparent ? m_currentFillColor : Qt::white, this, tr("Select Fill Color"), QColorDialog::ShowAlphaChannel);
     if (c.isValid()) {
         m_currentFillColor = c;
         m_fillColorBtn->setText("");
@@ -548,6 +567,34 @@ void MainWindow::onSelectFillColor() {
         m_fillColorBtn->setStyleSheet("background-color: #888; color: #eee; border: 1px solid #666; border-radius: 3px; font-weight: bold;");
     }
     updateToolProperties();
+    if (CanvasScene* scene = currentScene()) {
+        for (auto* item : scene->selectedItems()) {
+            if (auto* txt = dynamic_cast<TextItem*>(item)) {
+                txt->setFillColor(m_currentFillColor);
+            } else if (auto* shape = dynamic_cast<ShapeItem*>(item)) {
+                shape->setFillColor(m_currentFillColor);
+            }
+        }
+    }
+}
+
+void MainWindow::onSelectFont() {
+    bool ok = false;
+    QFont f = QFontDialog::getFont(&ok, m_currentFont, this, tr("Select Font"));
+    if (ok) {
+        m_currentFont = f;
+        for (int i = 0; i < m_tabWidget->count(); ++i) {
+            CanvasView* v = qobject_cast<CanvasView*>(m_tabWidget->widget(i));
+            if (v && v->canvasScene()) {
+                v->canvasScene()->setCurrentFont(f);
+                for (auto* item : v->canvasScene()->selectedItems()) {
+                    if (auto* txt = dynamic_cast<TextItem*>(item)) {
+                        txt->setFont(f);
+                    }
+                }
+            }
+        }
+    }
 }
 
 void MainWindow::onStrokeWidthChanged(int width) {
@@ -587,6 +634,7 @@ void MainWindow::updateToolProperties() {
             v->canvasScene()->setFillColor(m_currentFillColor);
             v->canvasScene()->setStrokeWidth(m_currentStrokeWidth);
             v->canvasScene()->setBlurLevel(m_currentBlurLevel);
+            v->canvasScene()->setCurrentFont(m_currentFont);
         }
     }
 }
@@ -604,17 +652,32 @@ void MainWindow::updateToolPropertiesVisibility(ToolType tool) {
                      tool == ToolType::Ellipse);
     bool isBadge = (tool == ToolType::Badge);
     bool isBlur = (tool == ToolType::Blur);
+    bool isText = (tool == ToolType::Text);
 
-    if (m_strokeLbl) m_strokeLbl->setVisible(hasStroke);
-    if (m_strokeColorBtn) m_strokeColorBtn->setVisible(hasStroke);
-    if (m_fillLbl) m_fillLbl->setVisible(hasFill);
-    if (m_fillColorBtn) m_fillColorBtn->setVisible(hasFill);
-    if (m_widthLbl) m_widthLbl->setVisible(hasWidth);
-    if (m_strokeWidthSpin) m_strokeWidthSpin->setVisible(hasWidth);
-    if (m_resetBadgeBtn) m_resetBadgeBtn->setVisible(isBadge);
+    if (m_actStrokeLbl) m_actStrokeLbl->setVisible(hasStroke);
+    if (m_actStrokeColorBtn) m_actStrokeColorBtn->setVisible(hasStroke);
+    if (m_actFillLbl) m_actFillLbl->setVisible(hasFill);
+    if (m_actFillColorBtn) m_actFillColorBtn->setVisible(hasFill);
+    if (m_actFontBtn) m_actFontBtn->setVisible(isText);
+    if (m_actWidthLbl) m_actWidthLbl->setVisible(hasWidth);
+    if (m_actStrokeWidthSpin) m_actStrokeWidthSpin->setVisible(hasWidth);
+    if (m_actBadgeSeparator) m_actBadgeSeparator->setVisible(isBadge);
+    if (m_actResetBadgeBtn) m_actResetBadgeBtn->setVisible(isBadge);
+    if (m_actBlurRadiusLbl) m_actBlurRadiusLbl->setVisible(isBlur);
+    if (m_actBlurRadiusSpin) m_actBlurRadiusSpin->setVisible(isBlur);
 
-    if (m_blurRadiusLbl) m_blurRadiusLbl->setVisible(isBlur);
-    if (m_blurRadiusSpin) m_blurRadiusSpin->setVisible(isBlur);
+    if (m_strokeLbl) {
+        m_strokeLbl->setText(isText ? tr(" Text: ") : tr(" Stroke: "));
+    }
+    if (m_strokeColorBtn) {
+        m_strokeColorBtn->setToolTip(isText ? tr("Text Color") : tr("Stroke Color"));
+    }
+    if (m_fillLbl) {
+        m_fillLbl->setText(isText ? tr("  Background: ") : tr("  Fill: "));
+    }
+    if (m_fillColorBtn) {
+        m_fillColorBtn->setToolTip(isText ? tr("Textbox Background Color (Ø for Transparent)") : tr("Fill Color (Ø for Transparent)"));
+    }
 }
 
 void MainWindow::onCaptureFullscreen() {

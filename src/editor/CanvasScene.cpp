@@ -94,6 +94,15 @@ QPixmap CanvasScene::renderToPixmap() const {
     // Hide selection markers during export
     if (m_areaSelectionRectItem) m_areaSelectionRectItem->setVisible(false);
 
+    // Finish editing on any active text item during export
+    for (auto* item : items()) {
+        if (auto* txt = dynamic_cast<TextItem*>(item)) {
+            if (txt->isEditing()) {
+                txt->finishEditing();
+            }
+        }
+    }
+
     // Deselect items temporarily for clean render
     QList<QGraphicsItem*> selected = selectedItems();
     for (auto* item : selected) item->setSelected(false);
@@ -118,6 +127,11 @@ void CanvasScene::setCurrentTool(ToolType tool) {
         if (item != m_basePixmapItem && item != m_areaSelectionRectItem) {
             item->setFlag(QGraphicsItem::ItemIsSelectable, tool == ToolType::Select);
             item->setFlag(QGraphicsItem::ItemIsMovable, tool == ToolType::Select);
+            if (auto* txt = dynamic_cast<TextItem*>(item)) {
+                if (tool != ToolType::Text && txt->isEditing()) {
+                    txt->finishEditing();
+                }
+            }
         }
     }
 }
@@ -248,6 +262,19 @@ void CanvasScene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
         m_areaSelectionRectItem->setRect(m_selectedArea);
         m_areaSelectionRectItem->setVisible(true);
         emit areaSelectionChanged(m_selectedArea, true);
+        return;
+    }
+
+    if (m_currentTool == ToolType::Text) {
+        QGraphicsItem* clicked = itemAt(m_startPoint, QTransform());
+        if (clicked && clicked != m_basePixmapItem && clicked != m_areaSelectionRectItem) {
+            if (dynamic_cast<TextItem*>(clicked)) {
+                QGraphicsScene::mousePressEvent(event);
+                return;
+            }
+        }
+        createNewItem(m_startPoint);
+        event->accept();
         return;
     }
 
@@ -434,16 +461,23 @@ void CanvasScene::createNewItem(const QPointF& pos) {
         return;
     }
     case ToolType::Text: {
-        bool ok = false;
-        QString text = QInputDialog::getText(nullptr, tr("Text Annotation"), tr("Enter text:"), QLineEdit::Normal, "", &ok);
-        if (ok && !text.isEmpty()) {
-            TextItem* txt = new TextItem(text, pos);
-            txt->setStrokeColor(m_strokeColor);
-            txt->setFillColor(m_fillColor);
-            txt->setFont(m_font);
-            m_undoStack.push(new AddItemCommand(this, txt));
-            emit sceneModified();
-        }
+        TextItem* txt = new TextItem("", pos);
+        txt->setStrokeColor(m_strokeColor);
+        txt->setFillColor(m_fillColor);
+        txt->setFont(m_font);
+        txt->setInitialCreation(true);
+        addItem(txt);
+        connect(txt, &TextItem::initialCreationFinished, this, [this, txt](bool hasText) {
+            if (!hasText) {
+                removeItem(txt);
+                delete txt;
+            } else {
+                removeItem(txt);
+                m_undoStack.push(new AddItemCommand(this, txt));
+                emit sceneModified();
+            }
+        });
+        txt->startEditing();
         m_activeItem = nullptr;
         m_isDrawing = false;
         return;

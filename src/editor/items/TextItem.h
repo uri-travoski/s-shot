@@ -1,30 +1,58 @@
 #pragma once
 
-#include "BaseAnnotationItem.h"
+#include <QGraphicsTextItem>
+#include <QColor>
 #include <QFont>
-#include <QString>
+#include <QPainter>
+#include <QMenu>
+#include <QColorDialog>
+#include <QFontDialog>
+#include <QGraphicsSceneMouseEvent>
+#include <QGraphicsSceneContextMenuEvent>
+#include <QFocusEvent>
+#include <QKeyEvent>
 
-class TextItem : public BaseAnnotationItem {
+class TextItem : public QGraphicsTextItem {
+    Q_OBJECT
+
 public:
     enum { Type = UserType + 6 };
     int type() const override { return Type; }
 
-    TextItem(const QString& text = "", const QPointF& pos = QPointF());
+    explicit TextItem(const QString& text = "", const QPointF& pos = QPointF());
 
     void setText(const QString& t);
-    QString text() const { return m_text; }
+    QString text() const { return toPlainText(); }
 
-    void setFont(const QFont& f);
-    QFont font() const { return m_font; }
+    QColor strokeColor() const { return m_strokeColor; }
+    void setStrokeColor(const QColor& c);
+
+    QColor fillColor() const { return m_fillColor; }
+    void setFillColor(const QColor& c);
+
+    bool isEditing() const { return m_isEditing; }
+    void startEditing();
+    void finishEditing();
+
+    void setInitialCreation(bool b) { m_isInitialCreation = b; }
+    bool isInitialCreation() const { return m_isInitialCreation; }
 
     QRectF boundingRect() const override;
-    QPainterPath shape() const override;
     void paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget) override;
 
-private:
-    void calculateBounds();
+signals:
+    void initialCreationFinished(bool hasText);
 
-    QString m_text;
-    QFont m_font;
-    QRectF m_textRect;
+protected:
+    void focusInEvent(QFocusEvent* event) override;
+    void focusOutEvent(QFocusEvent* event) override;
+    void mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) override;
+    void contextMenuEvent(QGraphicsSceneContextMenuEvent* event) override;
+    void keyPressEvent(QKeyEvent* event) override;
+
+private:
+    QColor m_strokeColor = QColor(255, 30, 30);
+    QColor m_fillColor = Qt::transparent; // Transparent by default
+    bool m_isEditing = false;
+    bool m_isInitialCreation = false;
 };

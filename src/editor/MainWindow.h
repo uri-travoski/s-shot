@@ -45,6 +45,7 @@ public slots:
     void onStrokeWidthChanged(int width);
     void onBlurLevelChanged(int level);
     void onResetBadgeCounter();
+    void onSelectFont();
 
 protected:
     void closeEvent(QCloseEvent* event) override;
@@ -105,6 +106,19 @@ private:
     QLabel* m_blurRadiusLbl = nullptr;
     QSpinBox* m_blurRadiusSpin = nullptr;
     QPushButton* m_resetBadgeBtn = nullptr;
+    QPushButton* m_fontBtn = nullptr;
+
+    QAction* m_actStrokeLbl = nullptr;
+    QAction* m_actStrokeColorBtn = nullptr;
+    QAction* m_actFillLbl = nullptr;
+    QAction* m_actFillColorBtn = nullptr;
+    QAction* m_actFontBtn = nullptr;
+    QAction* m_actWidthLbl = nullptr;
+    QAction* m_actStrokeWidthSpin = nullptr;
+    QAction* m_actBlurRadiusLbl = nullptr;
+    QAction* m_actBlurRadiusSpin = nullptr;
+    QAction* m_actBadgeSeparator = nullptr;
+    QAction* m_actResetBadgeBtn = nullptr;
 
     // Status bar widgets
     QLabel* m_statusDimensions = nullptr;
@@ -113,6 +127,7 @@ private:
 
     QColor m_currentStrokeColor = QColor(255, 30, 30);
     QColor m_currentFillColor = Qt::transparent;
+    QFont m_currentFont = QFont("Sans", 14, QFont::Bold);
     int m_currentStrokeWidth = 3;
     int m_currentBlurLevel = 5;
     bool m_firstCloseNotification = true;
