@@ -69,7 +69,8 @@ jobs:
             -d resources/s-shot.desktop \
             --output appimage
 
-          mv *.AppImage dist/ || true
+          # Move only the generated S-Shot AppImage
+          mv S-Shot*.AppImage dist/
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -80,18 +81,16 @@ jobs:
   build-flatpak:
     name: Build Flatpak
     runs-on: ubuntu-latest
-    container:
-      image: bilelmoussaoui/flatpak-github-actions:kde-6.8
-      options: --privileged
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Build Flatpak bundle
-        run: |
-          flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-          flatpak-builder --force-clean --repo=repo build packaging/flatpak/org.sshot.s-shot.yml
-          flatpak build-bundle repo s-shot-0.9.0.flatpak org.sshot.s-shot
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: s-shot-0.9.0.flatpak
+          manifest-path: org.sshot.s-shot.yml
+          cache-key: flatpak-builder-${{ github.sha }}
 
       - name: Upload Flatpak artifact
         uses: actions/upload-artifact@v4
