@@ -3,7 +3,10 @@
 #include <QPainter>
 #include <QStyleOptionGraphicsItem>
 #include <QGraphicsSceneMouseEvent>
+#include <QWheelEvent>
 #include "editor/CanvasScene.h"
+#include "editor/CanvasView.h"
+#include "core/SettingsManager.h"
 #include "editor/items/PenItem.h"
 #include "editor/items/BlurItem.h"
 #include "editor/items/ArrowItem.h"
@@ -36,6 +39,9 @@ private slots:
     void testBucketFillTool();
     void testDefaultBlurStrength();
     void testSelectionPropertiesSync();
+    void testDefaultSaveLocation();
+    void testCanvasViewDirectMousewheelZoom();
+    void testBlurItemMemoryOptimization();
 };
 
 void TestEditorTools::initTestCase() {
@@ -491,6 +497,71 @@ void TestEditorTools::testSelectionPropertiesSync() {
     // Modify selected shape's width
     shape->setStrokeWidth(9);
     QCOMPARE(shape->strokeWidth(), 9);
+}
+
+void TestEditorTools::testDefaultSaveLocation() {
+    SettingsManager& s = SettingsManager::instance();
+    QString expectedDir = QStandardPaths::writableLocation(QStandardPaths::PicturesLocation);
+    if (expectedDir.isEmpty()) {
+        expectedDir = QDir::homePath() + "/Pictures";
+    }
+    QCOMPARE(s.saveLocation(), expectedDir);
+}
+
+void TestEditorTools::testCanvasViewDirectMousewheelZoom() {
+    TestScene scene;
+    QPixmap pix(800, 600);
+    pix.fill(Qt::white);
+    scene.setBasePixmap(pix);
+
+    CanvasView view(&scene);
+    view.resize(800, 600);
+
+    qreal initialZoom = view.zoomFactor();
+
+    // Wheel up zooms in directly without Ctrl
+    QWheelEvent zoomInEvent(
+        QPointF(400, 300),
+        QPointF(400, 300),
+        QPoint(0, 0),
+        QPoint(0, 120),
+        Qt::NoButton,
+        Qt::NoModifier,
+        Qt::NoScrollPhase,
+        false
+    );
+    QApplication::sendEvent(view.viewport(), &zoomInEvent);
+
+    QVERIFY(view.zoomFactor() > initialZoom);
+
+    // Wheel down zooms out directly without Ctrl
+    QWheelEvent zoomOutEvent(
+        QPointF(400, 300),
+        QPointF(400, 300),
+        QPoint(0, 0),
+        QPoint(0, -120),
+        Qt::NoButton,
+        Qt::NoModifier,
+        Qt::NoScrollPhase,
+        false
+    );
+    QApplication::sendEvent(view.viewport(), &zoomOutEvent);
+
+    QVERIFY(view.zoomFactor() <= initialZoom + 0.05);
+}
+
+void TestEditorTools::testBlurItemMemoryOptimization() {
+    TestScene scene;
+    QPixmap largePix(800, 600);
+    largePix.fill(Qt::cyan);
+    scene.setBasePixmap(largePix);
+
+    BlurItem* blur = new BlurItem(QRectF(100, 100, 200, 200), largePix, 4);
+    scene.addItem(blur);
+    QVERIFY(!blur->boundingRect().isEmpty());
+
+    blur->setBlurLevel(7);
+    QCOMPARE(blur->blurLevel(), 7);
 }
 
 int main(int argc, char** argv) {

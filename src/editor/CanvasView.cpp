@@ -2,6 +2,7 @@
 #include <QWheelEvent>
 #include <QScrollBar>
 #include <QGraphicsPixmapItem>
+#include <QTimer>
 
 CanvasView::CanvasView(CanvasScene* scene, QWidget* parent)
     : QGraphicsView(scene, parent)
@@ -11,6 +12,8 @@ CanvasView::CanvasView(CanvasScene* scene, QWidget* parent)
     setRenderHint(QPainter::SmoothPixmapTransform, true);
     setDragMode(QGraphicsView::NoDrag);
     setMouseTracking(true);
+    setTransformationAnchor(QGraphicsView::AnchorUnderMouse);
+    setResizeAnchor(QGraphicsView::AnchorUnderMouse);
     setStyleSheet("border: none;");
 
     m_areaActionWidget = new QWidget(this);
@@ -49,20 +52,21 @@ void CanvasView::applyTheme(bool isLight) {
         m_areaActionWidget->setStyleSheet(
             "QWidget { background-color: #e4e4e4; border: 1px solid #bbbbbb; border-radius: 6px; padding: 2px; }"
             "QPushButton { background-color: #ffffff; color: #222222; border: 1px solid #c0c0c0; border-radius: 4px; padding: 4px 8px; font-weight: bold; font-size: 11px; }"
-            "QPushButton:hover { background-color: #f0f0f0; border-color: #2e7d32; color: #2e7d32; }"
+            "QPushButton:hover { background-color: #f0f0f0; border-color: #888888; color: #111111; }"
         );
     } else {
         setBackgroundBrush(QBrush(QColor(36, 36, 36)));
         m_areaActionWidget->setStyleSheet(
             "QWidget { background-color: #2b2b2b; border: 1px solid #484848; border-radius: 6px; padding: 2px; }"
             "QPushButton { background-color: #383838; color: #ffffff; border: 1px solid #505050; border-radius: 4px; padding: 4px 8px; font-weight: bold; font-size: 11px; }"
-            "QPushButton:hover { background-color: #444444; border-color: #30e500; color: #30e500; }"
+            "QPushButton:hover { background-color: #484848; border-color: #666666; color: #ffffff; }"
         );
     }
 }
 
 void CanvasView::applyZoom(qreal factor) {
     factor = qBound(0.1, factor, 10.0);
+    if (qFuzzyCompare(factor, m_zoomFactor)) return;
     m_zoomFactor = factor;
     setTransform(QTransform::fromScale(m_zoomFactor, m_zoomFactor));
     updateFloatingBarPosition();
@@ -82,23 +86,36 @@ void CanvasView::zoomActual() {
 }
 
 void CanvasView::zoomFit() {
-    if (m_scene->sceneRect().isEmpty()) return;
+    if (!m_scene || m_scene->sceneRect().isEmpty()) return;
+    if (viewport()->width() <= 30 || viewport()->height() <= 30) return;
     qreal wFactor = (viewport()->width() - 30) / m_scene->sceneRect().width();
     qreal hFactor = (viewport()->height() - 30) / m_scene->sceneRect().height();
     applyZoom(qMin(wFactor, hFactor));
+    centerOn(m_scene->sceneRect().center());
 }
 
 void CanvasView::wheelEvent(QWheelEvent* event) {
-    if (event->modifiers() & Qt::ControlModifier) {
-        if (event->angleDelta().y() > 0) {
-            zoomIn();
-        } else if (event->angleDelta().y() < 0) {
-            zoomOut();
-        }
+    if (event->angleDelta().y() == 0) {
         event->accept();
-    } else {
-        QGraphicsView::wheelEvent(event);
+        return;
     }
+
+    QPointF mousePos = event->position();
+    QPointF scenePos = mapToScene(mousePos.toPoint());
+
+    qreal factor = (event->angleDelta().y() > 0) ? 1.25 : (1.0 / 1.25);
+    qreal newZoom = qBound(0.1, m_zoomFactor * factor, 10.0);
+    if (!qFuzzyCompare(newZoom, m_zoomFactor)) {
+        m_zoomFactor = newZoom;
+        setTransform(QTransform::fromScale(m_zoomFactor, m_zoomFactor));
+        QPointF newMousePos = mapFromScene(scenePos);
+        QPointF delta = newMousePos - mousePos;
+        horizontalScrollBar()->setValue(horizontalScrollBar()->value() + delta.x());
+        verticalScrollBar()->setValue(verticalScrollBar()->value() + delta.y());
+        updateFloatingBarPosition();
+        emit zoomChanged(m_zoomFactor);
+    }
+    event->accept();
 }
 
 void CanvasView::mousePressEvent(QMouseEvent* event) {
@@ -138,8 +155,24 @@ void CanvasView::mouseReleaseEvent(QMouseEvent* event) {
     updateFloatingBarPosition();
 }
 
+void CanvasView::showEvent(QShowEvent* event) {
+    QGraphicsView::showEvent(event);
+    if (!m_initialFitDone) {
+        m_initialFitDone = true;
+        QTimer::singleShot(0, this, [this]() {
+            zoomFit();
+        });
+    }
+}
+
 void CanvasView::resizeEvent(QResizeEvent* event) {
     QGraphicsView::resizeEvent(event);
+    if (!m_initialFitDone && viewport()->width() > 50 && viewport()->height() > 50) {
+        m_initialFitDone = true;
+        QTimer::singleShot(0, this, [this]() {
+            zoomFit();
+        });
+    }
     updateFloatingBarPosition();
 }
 

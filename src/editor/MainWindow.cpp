@@ -68,41 +68,41 @@ void MainWindow::applyTheme(const QString& theme) {
             "QMenuBar { background-color: #d6d6d6; color: #222222; border-bottom: 1px solid #bfbfbf; }"
             "QMenuBar::item:selected { background-color: #c4c4c4; }"
             "QMenu { background-color: #eeeeee; color: #222222; border: 1px solid #b5b5b5; }"
-            "QMenu::item:selected { background-color: #2e7d32; color: #ffffff; }"
+            "QMenu::item:selected { background-color: #c4c4c4; color: #111111; }"
             "QMenu::separator { height: 1px; background-color: #cccccc; margin: 4px 8px; }"
             "QToolBar { background-color: #dcdcdc; border-bottom: 1px solid #cccccc; spacing: 4px; padding: 3px; }"
             "QToolButton { background-color: transparent; border: 1px solid transparent; border-radius: 4px; padding: 4px; color: #222222; }"
             "QToolButton:hover { background-color: #cccccc; border-color: #b0b0b0; }"
-            "QToolButton:checked { background-color: #2e7d32; border-color: #30e500; color: #ffffff; }"
+            "QToolButton:checked { background-color: #b8b8b8; border: 1px solid #999999; color: #111111; }"
             "QTabWidget::pane { border: none; background-color: #cccccc; }"
             "QTabBar::tab { background-color: #d0d0d0; color: #555555; padding: 8px 16px; border-top-left-radius: 4px; border-top-right-radius: 4px; margin-right: 2px; }"
-            "QTabBar::tab:selected { background-color: #ebebeb; color: #2e7d32; font-weight: bold; border-bottom: 2px solid #2e7d32; }"
+            "QTabBar::tab:selected { background-color: #ebebeb; color: #111111; font-weight: bold; border-bottom: 2px solid #666666; }"
             "QStatusBar { background-color: #d6d6d6; color: #333333; border-top: 1px solid #bfbfbf; }"
             "QLabel { color: #222222; }"
             "QSpinBox { background-color: #ffffff; color: #222222; border: 1px solid #b0b0b0; border-radius: 3px; padding: 2px 4px; }"
         );
-        m_newTabBtn->setStyleSheet("QPushButton { font-weight: bold; font-size: 14px; background: transparent; color: #2e7d32; border: none; padding: 4px 10px; } QPushButton:hover { background: #cccccc; border-radius: 4px; }");
+        m_newTabBtn->setStyleSheet("QPushButton { font-weight: bold; font-size: 14px; background: transparent; color: #444444; border: none; padding: 4px 10px; } QPushButton:hover { background: #cccccc; border-radius: 4px; }");
     } else {
-        // Dark Theme
+        // Dark Theme: Neutral Sleek Dark UI
         setStyleSheet(
             "QMainWindow { background-color: #2b2b2b; color: #e0e0e0; }"
             "QMenuBar { background-color: #242424; color: #e0e0e0; border-bottom: 1px solid #3c3c3c; }"
             "QMenuBar::item:selected { background-color: #383838; }"
             "QMenu { background-color: #2c2c2c; color: #ffffff; border: 1px solid #444; }"
-            "QMenu::item:selected { background-color: #388e3c; color: #ffffff; }"
+            "QMenu::item:selected { background-color: #484848; color: #ffffff; }"
             "QMenu::separator { height: 1px; background-color: #444; margin: 4px 8px; }"
             "QToolBar { background-color: #282828; border: none; spacing: 4px; padding: 3px; }"
             "QToolButton { background-color: transparent; border: 1px solid transparent; border-radius: 4px; padding: 4px; color: #e0e0e0; }"
-            "QToolButton:hover { background-color: #3d3d3d; border-color: #555555; }"
-            "QToolButton:checked { background-color: #2e7d32; border-color: #30e500; color: #ffffff; }"
+            "QToolButton:hover { background-color: #383838; border-color: #555555; }"
+            "QToolButton:checked { background-color: #484848; border: 1px solid #666666; color: #ffffff; }"
             "QTabWidget::pane { border: none; background-color: #202020; }"
             "QTabBar::tab { background-color: #282828; color: #aaaaaa; padding: 8px 16px; border-top-left-radius: 4px; border-top-right-radius: 4px; margin-right: 2px; }"
-            "QTabBar::tab:selected { background-color: #383838; color: #30e500; font-weight: bold; border-bottom: 2px solid #30e500; }"
+            "QTabBar::tab:selected { background-color: #383838; color: #ffffff; font-weight: bold; border-bottom: 2px solid #888888; }"
             "QStatusBar { background-color: #1e1e1e; color: #999999; border-top: 1px solid #333333; }"
             "QLabel { color: #e0e0e0; }"
             "QSpinBox { background-color: #383838; color: #ffffff; border: 1px solid #555555; border-radius: 3px; padding: 2px 4px; }"
         );
-        m_newTabBtn->setStyleSheet("QPushButton { font-weight: bold; font-size: 14px; background: transparent; color: #30e500; border: none; padding: 4px 10px; } QPushButton:hover { background: #383838; border-radius: 4px; }");
+        m_newTabBtn->setStyleSheet("QPushButton { font-weight: bold; font-size: 14px; background: transparent; color: #cccccc; border: none; padding: 4px 10px; } QPushButton:hover { background: #383838; border-radius: 4px; }");
     }
 
     // Update icons for all registered actions
@@ -334,14 +334,14 @@ void MainWindow::setupToolbars() {
     };
 
     m_actSelect = addToolAct("select", tr("Select / Area Tool (Copy/Cut/Move/Delete/Crop)"), ToolType::Select, true);
+    m_actText = addToolAct("text", tr("Text"), ToolType::Text);
+    m_actArrow = addToolAct("arrow", tr("Arrow"), ToolType::Arrow);
     m_actPen = addToolAct("pen", tr("Pen (Freehand Drawing)"), ToolType::Pen);
     m_actHighlighter = addToolAct("highlighter", tr("Highlighter"), ToolType::Highlighter);
     m_actLine = addToolAct("line", tr("Line"), ToolType::Line);
-    m_actArrow = addToolAct("arrow", tr("Arrow"), ToolType::Arrow);
     m_actDoubleArrow = addToolAct("double_arrow", tr("Double Arrow"), ToolType::DoubleArrow);
     m_actRect = addToolAct("rect", tr("Rectangle"), ToolType::Rectangle);
     m_actEllipse = addToolAct("ellipse", tr("Ellipse"), ToolType::Ellipse);
-    m_actText = addToolAct("text", tr("Text"), ToolType::Text);
     m_actBadge = addToolAct("badge", tr("Number / Stepper Badge (1, 2, 3...)"), ToolType::Badge);
     m_actBlur = addToolAct("blur", tr("Blur / Pixelate Redaction"), ToolType::Blur);
     m_actBucket = addToolAct("bucket", tr("Fill Colour Bucket Tool"), ToolType::BucketFill);
@@ -385,10 +385,10 @@ void MainWindow::addImageTab(const QPixmap& pixmap, const QString& title) {
     int idx = m_tabWidget->addTab(view, tabTitle);
     m_tabWidget->setCurrentIndex(idx);
 
-    view->zoomFit();
     show();
     raise();
     activateWindow();
+    QTimer::singleShot(0, view, &CanvasView::zoomFit);
 }
 
 void MainWindow::createBlankTab(int width, int height) {
@@ -470,13 +470,82 @@ void MainWindow::copyActiveImageToClipboard() {
     statusBar()->showMessage(tr("Image copied to clipboard!"), 3000);
 }
 
-void MainWindow::onTabCloseRequested(int index) {
-    if (m_tabWidget->count() <= 1) {
-        m_tabWidget->removeTab(index);
-        createBlankTab();
+bool MainWindow::saveTab(int index) {
+    QWidget* w = m_tabWidget->widget(index);
+    CanvasView* view = qobject_cast<CanvasView*>(w);
+    if (!view || !view->canvasScene()) return false;
+
+    CanvasScene* scene = view->canvasScene();
+    QString saveDir = SettingsManager::instance().saveLocation();
+    QDir().mkpath(saveDir);
+
+    QString ext = SettingsManager::instance().defaultFormat().toLower();
+    QString tabTitle = m_tabWidget->tabText(index);
+    QString fileName;
+    if (tabTitle.endsWith("." + ext, Qt::CaseInsensitive)) {
+        fileName = tabTitle;
     } else {
-        m_tabWidget->removeTab(index);
+        fileName = QString("Screenshot_%1.%2").arg(QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss")).arg(ext);
     }
+    QString fullPath = saveDir + "/" + fileName;
+
+    QPixmap outPix = scene->renderToPixmap();
+    if (outPix.save(fullPath)) {
+        statusBar()->showMessage(tr("Saved to %1").arg(fullPath), 3000);
+        m_tabWidget->setTabText(index, fileName);
+        return true;
+    } else {
+        QString filter = QString("%1 (*.%2);;All Files (*)").arg(ext.toUpper()).arg(ext);
+        QString path = QFileDialog::getSaveFileName(this, tr("Save Screenshot As"), fullPath, filter);
+        if (path.isEmpty()) {
+            return false;
+        }
+        if (outPix.save(path)) {
+            QFileInfo fi(path);
+            statusBar()->showMessage(tr("Saved to %1").arg(path), 3000);
+            m_tabWidget->setTabText(index, fi.fileName());
+            return true;
+        }
+        return false;
+    }
+}
+
+bool MainWindow::maybeSaveTab(int index) {
+    if (index < 0 || index >= m_tabWidget->count()) return true;
+
+    QString tabTitle = m_tabWidget->tabText(index);
+    QMessageBox::StandardButton res = QMessageBox::question(
+        this,
+        tr("Save Changes"),
+        tr("Do you want to save changes to \"%1\" before closing?").arg(tabTitle),
+        QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
+        QMessageBox::Save
+    );
+
+    if (res == QMessageBox::Save) {
+        return saveTab(index);
+    } else if (res == QMessageBox::Cancel) {
+        return false;
+    }
+    // Discard
+    return true;
+}
+
+void MainWindow::onTabCloseRequested(int index) {
+    if (!maybeSaveTab(index)) {
+        return;
+    }
+
+    QWidget* w = m_tabWidget->widget(index);
+    m_tabWidget->removeTab(index);
+    if (w) {
+        w->deleteLater();
+    }
+
+    if (m_tabWidget->count() == 0) {
+        createBlankTab();
+    }
+    malloc_trim(0);
 }
 
 void MainWindow::onCurrentTabChanged(int) {
@@ -877,6 +946,12 @@ void MainWindow::closeEvent(QCloseEvent* event) {
         hide();
         malloc_trim(0);
     } else {
+        for (int i = m_tabWidget->count() - 1; i >= 0; --i) {
+            if (!maybeSaveTab(i)) {
+                event->ignore();
+                return;
+            }
+        }
         event->accept();
     }
 }

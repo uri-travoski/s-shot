@@ -3,6 +3,7 @@
 #include <QScreen>
 #include <QClipboard>
 #include <QPainterPath>
+#include <malloc.h>
 
 ColorPickerOverlay::ColorPickerOverlay(QWidget* parent)
     : QWidget(parent, Qt::Window | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint | Qt::BypassWindowManagerHint)
@@ -193,4 +194,10 @@ void ColorPickerOverlay::keyPressEvent(QKeyEvent* event) {
         hide();
         emit pickingCancelled();
     }
+}
+
+void ColorPickerOverlay::hideEvent(QHideEvent* event) {
+    QWidget::hideEvent(event);
+    m_screenGrab = QPixmap();
+    malloc_trim(0);
 }

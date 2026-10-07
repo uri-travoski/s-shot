@@ -2,6 +2,8 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QImage>
+#include <QGraphicsScene>
+#include <QGraphicsPixmapItem>
 
 static void fastBoxBlur(QImage& img, int radius) {
     if (radius <= 0 || img.width() <= 2 || img.height() <= 2) return;
@@ -82,10 +84,25 @@ void BlurItem::setRect(const QRectF& r) {
     update();
 }
 
+QPixmap BlurItem::getSourcePixmap() const {
+    if (scene()) {
+        const auto itemsList = scene()->items();
+        for (QGraphicsItem* it : itemsList) {
+            if (auto* pixItem = dynamic_cast<QGraphicsPixmapItem*>(it)) {
+                if (pixItem->zValue() == -1000) {
+                    return pixItem->pixmap();
+                }
+            }
+        }
+    }
+    return m_sourceCache;
+}
+
 void BlurItem::setBlurLevel(int level) {
     m_blurLevel = qBound(1, level, 10);
-    if (!m_sourceCache.isNull()) {
-        applyBlur(m_sourceCache);
+    QPixmap src = getSourcePixmap();
+    if (!src.isNull()) {
+        applyBlur(src);
     }
     update();
 }
@@ -96,14 +113,26 @@ void BlurItem::updateEffect(const QPixmap& sourcePixmap) {
 }
 
 QVariant BlurItem::itemChange(GraphicsItemChange change, const QVariant& value) {
-    if (change == ItemPositionHasChanged && !m_sourceCache.isNull()) {
-        applyBlur(m_sourceCache);
+    if (change == ItemPositionHasChanged) {
+        QPixmap src = getSourcePixmap();
+        if (!src.isNull()) {
+            applyBlur(src);
+        }
+    } else if (change == ItemSceneHasChanged) {
+        if (scene()) {
+            m_sourceCache = QPixmap();
+        }
     }
     return BaseAnnotationItem::itemChange(change, value);
 }
 
 void BlurItem::applyBlur(const QPixmap& sourcePixmap) {
-    m_sourceCache = sourcePixmap;
+    if (!scene()) {
+        m_sourceCache = sourcePixmap;
+    } else {
+        m_sourceCache = QPixmap();
+    }
+
     if (sourcePixmap.isNull()) {
         m_blurredPixmap = QPixmap();
         return;

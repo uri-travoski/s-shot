@@ -25,6 +25,7 @@ protected:
     void mouseMoveEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
+    void hideEvent(QHideEvent* event) override;
 
 private:
     void drawMagnifier(QPainter& painter, const QPoint& pos);

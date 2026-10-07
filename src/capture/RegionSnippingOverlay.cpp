@@ -4,6 +4,7 @@
 #include <QScreen>
 #include <QPainterPath>
 #include <cmath>
+#include <malloc.h>
 
 RegionSnippingOverlay::RegionSnippingOverlay(QWidget* parent)
     : QWidget(parent, Qt::Window | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint | Qt::BypassWindowManagerHint)
@@ -283,4 +284,10 @@ void RegionSnippingOverlay::keyPressEvent(QKeyEvent* event) {
         QPixmap cropped = m_screenGrab.copy(m_selectedRect);
         emit regionCaptured(cropped);
     }
+}
+
+void RegionSnippingOverlay::hideEvent(QHideEvent* event) {
+    QWidget::hideEvent(event);
+    m_screenGrab = QPixmap();
+    malloc_trim(0);
 }

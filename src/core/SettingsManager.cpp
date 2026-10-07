@@ -11,14 +11,22 @@ SettingsManager::SettingsManager() {
     if (picDir.isEmpty()) {
         picDir = QDir::homePath() + "/Pictures";
     }
-    m_saveLocation = picDir + "/Screenshots";
+    m_saveLocation = picDir;
     load();
 }
 
 void SettingsManager::load() {
+    QString picDir = QStandardPaths::writableLocation(QStandardPaths::PicturesLocation);
+    if (picDir.isEmpty()) {
+        picDir = QDir::homePath() + "/Pictures";
+    }
+
     QSettings s("s-shot", "s-shot");
     m_startWithPC = s.value("startWithPC", false).toBool();
     m_saveLocation = s.value("saveLocation", m_saveLocation).toString();
+    if (m_saveLocation == picDir + "/Screenshots") {
+        m_saveLocation = picDir;
+    }
     m_defaultFormat = s.value("defaultFormat", "PNG").toString();
     m_autoCopyToClipboard = s.value("autoCopyToClipboard", true).toBool();
     m_openEditorAfterCapture = s.value("openEditorAfterCapture", true).toBool();

@@ -28,6 +28,7 @@ protected:
 
 private:
     void applyBlur(const QPixmap& sourcePixmap);
+    QPixmap getSourcePixmap() const;
 
     QRectF m_rect;
     QPixmap m_blurredPixmap;

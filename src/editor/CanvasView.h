@@ -31,6 +31,7 @@ protected:
     void mousePressEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
+    void showEvent(QShowEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
 
 private slots:
@@ -42,6 +43,7 @@ private:
 
     CanvasScene* m_scene = nullptr;
     qreal m_zoomFactor = 1.0;
+    bool m_initialFitDone = false;
     bool m_isPanning = false;
     QPoint m_panStart;
 

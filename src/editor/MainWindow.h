@@ -60,6 +60,9 @@ private slots:
     void onSceneSelectionChanged();
 
 private:
+    bool maybeSaveTab(int index);
+    bool saveTab(int index);
+
     void setupMenus();
     void setupToolbars();
     void setupStatusBar();
