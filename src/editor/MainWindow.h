@@ -7,6 +7,7 @@
 #include <QSpinBox>
 #include <QPushButton>
 #include <QLabel>
+#include <QFontComboBox>
 #include <QCloseEvent>
 #include "ToolType.h"
 #include "CanvasView.h"
@@ -17,11 +18,15 @@ class MainWindow : public QMainWindow {
 
 public:
     explicit MainWindow(QWidget* parent = nullptr);
+    ~MainWindow() override;
 
     void openImage(const QString& filePath);
     void addImageTab(const QPixmap& pixmap, const QString& title = QString());
     void createBlankTab(int width = 800, int height = 600);
     void applyTheme(const QString& theme);
+    void selectTool(ToolType tool);
+    CanvasView* currentView() const;
+    CanvasScene* currentScene() const;
 
 public slots:
     void openFileDialog();
@@ -45,7 +50,11 @@ public slots:
     void onStrokeWidthChanged(int width);
     void onBlurLevelChanged(int level);
     void onResetBadgeCounter();
+    void onBadgeNumberSpinChanged(int value);
+    void onBadgeCounterChanged(int nextNumber);
     void onSelectFont();
+    void onFontFamilyChanged(const QFont& font);
+    void onFontSizeChanged(int size);
 
 protected:
     void closeEvent(QCloseEvent* event) override;
@@ -68,9 +77,6 @@ private:
     void setupStatusBar();
     void updateToolProperties();
     void updateToolPropertiesVisibility(ToolType tool);
-
-    CanvasView* currentView() const;
-    CanvasScene* currentScene() const;
 
     QTabWidget* m_tabWidget = nullptr;
     QPushButton* m_newTabBtn = nullptr;
@@ -110,19 +116,29 @@ private:
     QSpinBox* m_strokeWidthSpin = nullptr;
     QLabel* m_blurRadiusLbl = nullptr;
     QSpinBox* m_blurRadiusSpin = nullptr;
+    QLabel* m_badgeNumberLbl = nullptr;
+    QSpinBox* m_badgeNumberSpin = nullptr;
     QPushButton* m_resetBadgeBtn = nullptr;
     QPushButton* m_fontBtn = nullptr;
+    QFontComboBox* m_fontFamilyCombo = nullptr;
+    QLabel* m_fontSizeLbl = nullptr;
+    QSpinBox* m_fontSizeSpin = nullptr;
 
     QAction* m_actStrokeLbl = nullptr;
     QAction* m_actStrokeColorBtn = nullptr;
     QAction* m_actFillLbl = nullptr;
     QAction* m_actFillColorBtn = nullptr;
     QAction* m_actFontBtn = nullptr;
+    QAction* m_actFontFamilyCombo = nullptr;
+    QAction* m_actFontSizeLbl = nullptr;
+    QAction* m_actFontSizeSpin = nullptr;
     QAction* m_actWidthLbl = nullptr;
     QAction* m_actStrokeWidthSpin = nullptr;
     QAction* m_actBlurRadiusLbl = nullptr;
     QAction* m_actBlurRadiusSpin = nullptr;
     QAction* m_actBadgeSeparator = nullptr;
+    QAction* m_actBadgeNumberLbl = nullptr;
+    QAction* m_actBadgeNumberSpin = nullptr;
     QAction* m_actResetBadgeBtn = nullptr;
 
     // Status bar widgets

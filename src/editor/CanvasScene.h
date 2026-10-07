@@ -42,14 +42,16 @@ public:
     void setCurrentFont(const QFont& f) { m_font = f; }
 
     int badgeCounter() const { return m_badgeCounter; }
-    void setBadgeCounter(int n) { m_badgeCounter = n; }
-    void resetBadgeCounter() { m_badgeCounter = 1; }
+    void setBadgeCounter(int n);
+    void resetBadgeCounter();
+    void modifyBadgeNumber(BadgeItem* badge, int newNumber);
 
     int blurLevel() const { return m_blurLevel; }
     void setBlurLevel(int level) { m_blurLevel = qBound(1, level, 10); }
 
     // Area selection operations
     QRectF selectedArea() const { return m_selectedArea; }
+    void setSelectedArea(const QRectF& rect);
     bool hasAreaSelection() const { return !m_selectedArea.isNull() && m_selectedArea.width() > 2 && m_selectedArea.height() > 2; }
     void clearAreaSelection();
 
@@ -64,12 +66,14 @@ signals:
     void areaSelectionChanged(const QRectF& area, bool active);
     void sceneModified();
     void toolActionCompleted();
+    void badgeCounterChanged(int nextNumber);
 
 protected:
     void mousePressEvent(QGraphicsSceneMouseEvent* event) override;
     void mouseMoveEvent(QGraphicsSceneMouseEvent* event) override;
     void mouseReleaseEvent(QGraphicsSceneMouseEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
+    void contextMenuEvent(QGraphicsSceneContextMenuEvent* event) override;
 
 private:
     void createNewItem(const QPointF& pos);

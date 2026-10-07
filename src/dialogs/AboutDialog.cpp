@@ -27,7 +27,7 @@ AboutDialog::AboutDialog(QWidget* parent)
     QVBoxLayout* titleLayout = new QVBoxLayout();
     QLabel* nameLabel = new QLabel("S-Shot", this);
     nameLabel->setStyleSheet("font-size: 22px; font-weight: bold; color: #30e500;");
-    QLabel* verLabel = new QLabel(tr("Version 1.23 (Linux x86_64)"), this);
+    QLabel* verLabel = new QLabel(tr("Version 1.24 (Linux x86_64)"), this);
     verLabel->setStyleSheet("font-size: 12px; color: #aaaaaa;");
     titleLayout->addWidget(nameLabel);
     titleLayout->addWidget(verLabel);

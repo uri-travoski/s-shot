@@ -14,6 +14,7 @@ class RegionSnippingOverlay : public QWidget {
 public:
     explicit RegionSnippingOverlay(QWidget* parent = nullptr);
     void startSnipping();
+    QRect selectedRect() const { return m_selectedPhysRect; }
 
 signals:
     void regionCaptured(const QPixmap& pixmap);
@@ -34,6 +35,7 @@ private:
     QPoint m_startPos;
     QPoint m_currentPos;
     QRect m_selectedRect;
+    QRect m_selectedPhysRect;
     bool m_isSelecting = false;
     bool m_selectionDone = false;
 };

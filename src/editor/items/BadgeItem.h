@@ -20,6 +20,10 @@ public:
     QPainterPath shape() const override;
     void paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget) override;
 
+protected:
+    void contextMenuEvent(class QGraphicsSceneContextMenuEvent* event) override;
+    void mouseDoubleClickEvent(class QGraphicsSceneMouseEvent* event) override;
+
 private:
     int m_number = 1;
     qreal m_radius = 16.0;

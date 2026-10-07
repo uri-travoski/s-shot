@@ -2,6 +2,7 @@
 #include "../core/SettingsManager.h"
 #include "../core/UpdateManager.h"
 #include "../core/IconManager.h"
+#include "../core/ClipboardHelper.h"
 #include "../capture/CaptureManager.h"
 #include "../dialogs/SettingsDialog.h"
 #include "../dialogs/AboutDialog.h"
@@ -58,6 +59,19 @@ MainWindow::MainWindow(QWidget* parent)
     createBlankTab(800, 500);
 }
 
+MainWindow::~MainWindow() {
+    if (m_tabWidget) {
+        for (int i = 0; i < m_tabWidget->count(); ++i) {
+            if (auto* v = qobject_cast<CanvasView*>(m_tabWidget->widget(i))) {
+                if (v->canvasScene()) {
+                    v->canvasScene()->disconnect(this);
+                    v->canvasScene()->clearSelection();
+                }
+            }
+        }
+    }
+}
+
 CanvasView* MainWindow::currentView() const {
     return qobject_cast<CanvasView*>(m_tabWidget->currentWidget());
 }
@@ -91,6 +105,12 @@ void MainWindow::applyTheme(const QString& theme) {
             "QSpinBox { background-color: #ffffff; color: #222222; border: 1px solid #b0b0b0; border-radius: 3px; padding: 2px 4px; }"
         );
         m_newTabBtn->setStyleSheet("QPushButton { font-weight: bold; font-size: 14px; background: transparent; color: #444444; border: none; padding: 4px 10px; } QPushButton:hover { background: #cccccc; border-radius: 4px; }");
+        if (m_resetBadgeBtn) {
+            m_resetBadgeBtn->setStyleSheet("QPushButton { padding: 2px 8px; border: 1px solid #b0b0b0; border-radius: 3px; font-size: 11px; font-weight: bold; background-color: #f0f0f0; color: #222222; } QPushButton:hover { background-color: #e0e0e0; border-color: #888888; } QPushButton:pressed { background-color: #d0d0d0; }");
+        }
+        if (m_fontBtn) {
+            m_fontBtn->setStyleSheet("QPushButton { padding: 2px 8px; border: 1px solid #b0b0b0; border-radius: 3px; font-size: 11px; background-color: #f0f0f0; color: #222222; } QPushButton:hover { background-color: #e0e0e0; border-color: #888888; }");
+        }
     } else {
         // Dark Theme: Neutral Sleek Dark UI
         setStyleSheet(
@@ -112,6 +132,12 @@ void MainWindow::applyTheme(const QString& theme) {
             "QSpinBox { background-color: #383838; color: #ffffff; border: 1px solid #555555; border-radius: 3px; padding: 2px 4px; }"
         );
         m_newTabBtn->setStyleSheet("QPushButton { font-weight: bold; font-size: 14px; background: transparent; color: #cccccc; border: none; padding: 4px 10px; } QPushButton:hover { background: #383838; border-radius: 4px; }");
+        if (m_resetBadgeBtn) {
+            m_resetBadgeBtn->setStyleSheet("QPushButton { padding: 2px 8px; border: 1px solid #555555; border-radius: 3px; font-size: 11px; font-weight: bold; background-color: #383838; color: #ffffff; } QPushButton:hover { background-color: #484848; border-color: #777777; } QPushButton:pressed { background-color: #282828; }");
+        }
+        if (m_fontBtn) {
+            m_fontBtn->setStyleSheet("QPushButton { padding: 2px 8px; border: 1px solid #555555; border-radius: 3px; font-size: 11px; background-color: #383838; color: #ffffff; } QPushButton:hover { background-color: #484848; border-color: #777777; }");
+        }
     }
 
     // Update icons for all registered actions
@@ -174,6 +200,11 @@ void MainWindow::setupMenus() {
 
     QAction* actPaste = editMenu->addAction(IconManager::getIcon("paste"), tr("&Paste"), QKeySequence::Paste, this, &MainWindow::pasteFromClipboard);
     registerAct(actPaste, "paste");
+
+    editMenu->addSeparator();
+
+    QAction* actResetBadge = editMenu->addAction(IconManager::getIcon("badge"), tr("Reset &Badge Numbering to 1"), this, &MainWindow::onResetBadgeCounter);
+    registerAct(actResetBadge, "badge");
 
     // Capture Menu
     QMenu* capMenu = mb->addMenu(tr("&Capture"));
@@ -285,10 +316,30 @@ void MainWindow::setupToolbars() {
     connect(m_fillColorBtn, &QPushButton::clicked, this, &MainWindow::onSelectFillColor);
     m_actFillColorBtn = m_propToolBar->addWidget(m_fillColorBtn);
 
-    m_fontBtn = new QPushButton(tr("Font..."), this);
+    m_fontBtn = new QPushButton(tr("More..."), this);
     m_fontBtn->setStyleSheet("padding: 2px 6px; border: 1px solid #888; border-radius: 3px; font-size: 11px;");
+    m_fontBtn->setToolTip(tr("Advanced font options"));
     connect(m_fontBtn, &QPushButton::clicked, this, &MainWindow::onSelectFont);
     m_actFontBtn = m_propToolBar->addWidget(m_fontBtn);
+
+    m_fontFamilyCombo = new QFontComboBox(this);
+    m_fontFamilyCombo->setCurrentFont(m_currentFont);
+    m_fontFamilyCombo->setFixedWidth(160);
+    m_fontFamilyCombo->setToolTip(tr("Font family"));
+    connect(m_fontFamilyCombo, &QFontComboBox::currentFontChanged, this, &MainWindow::onFontFamilyChanged);
+    m_actFontFamilyCombo = m_propToolBar->addWidget(m_fontFamilyCombo);
+
+    m_fontSizeLbl = new QLabel(tr(" Size: "), this);
+    m_actFontSizeLbl = m_propToolBar->addWidget(m_fontSizeLbl);
+
+    m_fontSizeSpin = new QSpinBox(this);
+    m_fontSizeSpin->setRange(6, 144);
+    m_fontSizeSpin->setValue(m_currentFont.pointSize() > 0 ? m_currentFont.pointSize() : 14);
+    m_fontSizeSpin->setFixedWidth(65);
+    m_fontSizeSpin->setSuffix(" pt");
+    m_fontSizeSpin->setToolTip(tr("Font point size"));
+    connect(m_fontSizeSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, &MainWindow::onFontSizeChanged);
+    m_actFontSizeSpin = m_propToolBar->addWidget(m_fontSizeSpin);
 
     m_widthLbl = new QLabel(tr("  Width: "), this);
     m_actWidthLbl = m_propToolBar->addWidget(m_widthLbl);
@@ -313,8 +364,20 @@ void MainWindow::setupToolbars() {
 
     m_actBadgeSeparator = m_propToolBar->addSeparator();
 
-    m_resetBadgeBtn = new QPushButton(tr("Reset Stepper (1)"), this);
-    m_resetBadgeBtn->setStyleSheet("padding: 2px 6px; border: 1px solid #888; border-radius: 3px; font-size: 11px;");
+    m_badgeNumberLbl = new QLabel(tr("  Next #: "), this);
+    m_actBadgeNumberLbl = m_propToolBar->addWidget(m_badgeNumberLbl);
+
+    m_badgeNumberSpin = new QSpinBox(this);
+    m_badgeNumberSpin->setRange(1, 9999);
+    m_badgeNumberSpin->setValue(1);
+    m_badgeNumberSpin->setFixedWidth(60);
+    m_badgeNumberSpin->setToolTip(tr("Next badge number counter (or number of selected badge)"));
+    connect(m_badgeNumberSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, &MainWindow::onBadgeNumberSpinChanged);
+    m_actBadgeNumberSpin = m_propToolBar->addWidget(m_badgeNumberSpin);
+
+    m_resetBadgeBtn = new QPushButton(tr("Reset Numbering (1)"), this);
+    m_resetBadgeBtn->setToolTip(tr("Reset badge number counter to 1"));
+    m_resetBadgeBtn->setStyleSheet("padding: 2px 8px; border: 1px solid #888; border-radius: 3px; font-size: 11px; font-weight: bold;");
     connect(m_resetBadgeBtn, &QPushButton::clicked, this, &MainWindow::onResetBadgeCounter);
     m_actResetBadgeBtn = m_propToolBar->addWidget(m_resetBadgeBtn);
 
@@ -390,6 +453,7 @@ void MainWindow::addImageTab(const QPixmap& pixmap, const QString& title) {
     scene->setBlurLevel(m_currentBlurLevel);
     scene->setCurrentFont(m_currentFont);
     connect(scene, &QGraphicsScene::selectionChanged, this, &MainWindow::onSceneSelectionChanged);
+    connect(scene, &CanvasScene::badgeCounterChanged, this, &MainWindow::onBadgeCounterChanged);
 
     QAction* activeAct = m_toolActionGroup->checkedAction();
     if (activeAct) {
@@ -485,9 +549,22 @@ void MainWindow::copyActiveImageToClipboard() {
     CanvasScene* scene = currentScene();
     if (!scene) return;
 
-    QPixmap outPix = scene->renderToPixmap();
-    QGuiApplication::clipboard()->setPixmap(outPix);
-    statusBar()->showMessage(tr("Image copied to clipboard!"), 3000);
+    QPixmap outPix;
+    if (scene->hasAreaSelection()) {
+        QRect cropRect = scene->selectedArea().toRect().intersected(scene->basePixmap().rect());
+        if (cropRect.width() >= 2 && cropRect.height() >= 2) {
+            QPixmap fullPix = scene->renderToPixmap();
+            outPix = fullPix.copy(cropRect);
+        } else {
+            outPix = scene->renderToPixmap();
+        }
+    } else {
+        outPix = scene->renderToPixmap();
+    }
+
+    if (ClipboardHelper::copyImage(outPix)) {
+        statusBar()->showMessage(tr("Image copied to clipboard!"), 3000);
+    }
 }
 
 bool MainWindow::saveTab(int index) {
@@ -600,6 +677,17 @@ void MainWindow::onRedo() {
     }
 }
 
+void MainWindow::selectTool(ToolType tool) {
+    if (!m_toolActionGroup) return;
+    for (QAction* act : m_toolActionGroup->actions()) {
+        if (act->data().toInt() == static_cast<int>(tool)) {
+            act->setChecked(true);
+            onToolTriggered(act);
+            break;
+        }
+    }
+}
+
 void MainWindow::onToolTriggered(QAction* action) {
     if (!action) return;
     ToolType tool = static_cast<ToolType>(action->data().toInt());
@@ -652,6 +740,7 @@ void MainWindow::onSelectStrokeColor() {
                     shape->setStrokeColor(c);
                 } else if (auto* badge = dynamic_cast<BadgeItem*>(item)) {
                     badge->setStrokeColor(c);
+                    badge->setFillColor(c);
                 }
             }
             emit scene->sceneModified();
@@ -688,6 +777,16 @@ void MainWindow::onSelectFont() {
     QFont f = QFontDialog::getFont(&ok, m_currentFont, this, tr("Select Font"));
     if (ok) {
         m_currentFont = f;
+        if (m_fontFamilyCombo) {
+            m_fontFamilyCombo->blockSignals(true);
+            m_fontFamilyCombo->setCurrentFont(f);
+            m_fontFamilyCombo->blockSignals(false);
+        }
+        if (m_fontSizeSpin) {
+            m_fontSizeSpin->blockSignals(true);
+            m_fontSizeSpin->setValue(f.pointSize() > 0 ? f.pointSize() : 14);
+            m_fontSizeSpin->blockSignals(false);
+        }
         for (int i = 0; i < m_tabWidget->count(); ++i) {
             CanvasView* v = qobject_cast<CanvasView*>(m_tabWidget->widget(i));
             if (v && v->canvasScene()) {
@@ -699,6 +798,38 @@ void MainWindow::onSelectFont() {
                 }
                 emit v->canvasScene()->sceneModified();
             }
+        }
+    }
+}
+
+void MainWindow::onFontFamilyChanged(const QFont& font) {
+    m_currentFont.setFamily(font.family());
+    CanvasScene* scene = currentScene();
+    if (!scene) return;
+    scene->setCurrentFont(m_currentFont);
+
+    for (auto* item : scene->selectedItems()) {
+        if (auto* txt = dynamic_cast<TextItem*>(item)) {
+            QFont f = txt->font();
+            f.setFamily(font.family());
+            txt->setFont(f);
+            emit scene->sceneModified();
+        }
+    }
+}
+
+void MainWindow::onFontSizeChanged(int size) {
+    m_currentFont.setPointSize(size);
+    CanvasScene* scene = currentScene();
+    if (!scene) return;
+    scene->setCurrentFont(m_currentFont);
+
+    for (auto* item : scene->selectedItems()) {
+        if (auto* txt = dynamic_cast<TextItem*>(item)) {
+            QFont f = txt->font();
+            f.setPointSize(size);
+            txt->setFont(f);
+            emit scene->sceneModified();
         }
     }
 }
@@ -740,8 +871,45 @@ void MainWindow::onBlurLevelChanged(int level) {
 void MainWindow::onResetBadgeCounter() {
     CanvasScene* scene = currentScene();
     if (scene) {
+        auto sel = scene->selectedItems();
+        if (!sel.isEmpty()) {
+            for (auto* item : sel) {
+                if (auto* badge = dynamic_cast<BadgeItem*>(item)) {
+                    scene->modifyBadgeNumber(badge, 1);
+                }
+            }
+        }
         scene->resetBadgeCounter();
+        if (m_badgeNumberSpin) {
+            m_badgeNumberSpin->blockSignals(true);
+            m_badgeNumberSpin->setValue(1);
+            m_badgeNumberSpin->blockSignals(false);
+        }
         statusBar()->showMessage(tr("Badge counter reset to 1"), 2000);
+    }
+}
+
+void MainWindow::onBadgeNumberSpinChanged(int value) {
+    CanvasScene* scene = currentScene();
+    if (!scene) return;
+
+    auto sel = scene->selectedItems();
+    if (!sel.isEmpty()) {
+        for (auto* item : sel) {
+            if (auto* badge = dynamic_cast<BadgeItem*>(item)) {
+                scene->modifyBadgeNumber(badge, value);
+            }
+        }
+    } else {
+        scene->setBadgeCounter(value);
+    }
+}
+
+void MainWindow::onBadgeCounterChanged(int nextNumber) {
+    if (m_badgeNumberSpin && (!currentScene() || currentScene()->selectedItems().isEmpty())) {
+        m_badgeNumberSpin->blockSignals(true);
+        m_badgeNumberSpin->setValue(nextNumber);
+        m_badgeNumberSpin->blockSignals(false);
     }
 }
 
@@ -772,6 +940,12 @@ void MainWindow::onSceneSelectionChanged() {
         m_blurRadiusSpin->blockSignals(true);
         m_blurRadiusSpin->setValue(m_currentBlurLevel);
         m_blurRadiusSpin->blockSignals(false);
+
+        if (m_badgeNumberSpin && scene) {
+            m_badgeNumberSpin->blockSignals(true);
+            m_badgeNumberSpin->setValue(scene->badgeCounter());
+            m_badgeNumberSpin->blockSignals(false);
+        }
         return;
     }
 
@@ -784,9 +958,18 @@ void MainWindow::onSceneSelectionChanged() {
         if (m_actFillLbl) m_actFillLbl->setVisible(false);
         if (m_actFillColorBtn) m_actFillColorBtn->setVisible(false);
         if (m_actFontBtn) m_actFontBtn->setVisible(false);
+        if (m_actFontFamilyCombo) m_actFontFamilyCombo->setVisible(false);
+        if (m_actFontSizeLbl) m_actFontSizeLbl->setVisible(false);
+        if (m_actFontSizeSpin) m_actFontSizeSpin->setVisible(false);
+        if (m_fontBtn) m_fontBtn->setVisible(false);
+        if (m_fontFamilyCombo) m_fontFamilyCombo->setVisible(false);
+        if (m_fontSizeLbl) m_fontSizeLbl->setVisible(false);
+        if (m_fontSizeSpin) m_fontSizeSpin->setVisible(false);
         if (m_actWidthLbl) m_actWidthLbl->setVisible(false);
         if (m_actStrokeWidthSpin) m_actStrokeWidthSpin->setVisible(false);
         if (m_actBadgeSeparator) m_actBadgeSeparator->setVisible(false);
+        if (m_actBadgeNumberLbl) m_actBadgeNumberLbl->setVisible(false);
+        if (m_actBadgeNumberSpin) m_actBadgeNumberSpin->setVisible(false);
         if (m_actResetBadgeBtn) m_actResetBadgeBtn->setVisible(false);
         if (m_actBlurRadiusLbl) m_actBlurRadiusLbl->setVisible(true);
         if (m_actBlurRadiusSpin) m_actBlurRadiusSpin->setVisible(true);
@@ -800,12 +983,32 @@ void MainWindow::onSceneSelectionChanged() {
         if (m_actFillLbl) m_actFillLbl->setVisible(true);
         if (m_actFillColorBtn) m_actFillColorBtn->setVisible(true);
         if (m_actFontBtn) m_actFontBtn->setVisible(true);
+        if (m_actFontFamilyCombo) m_actFontFamilyCombo->setVisible(true);
+        if (m_actFontSizeLbl) m_actFontSizeLbl->setVisible(true);
+        if (m_actFontSizeSpin) m_actFontSizeSpin->setVisible(true);
+        if (m_fontBtn) m_fontBtn->setVisible(true);
+        if (m_fontFamilyCombo) m_fontFamilyCombo->setVisible(true);
+        if (m_fontSizeLbl) m_fontSizeLbl->setVisible(true);
+        if (m_fontSizeSpin) m_fontSizeSpin->setVisible(true);
         if (m_actWidthLbl) m_actWidthLbl->setVisible(false);
         if (m_actStrokeWidthSpin) m_actStrokeWidthSpin->setVisible(false);
         if (m_actBadgeSeparator) m_actBadgeSeparator->setVisible(false);
+        if (m_actBadgeNumberLbl) m_actBadgeNumberLbl->setVisible(false);
+        if (m_actBadgeNumberSpin) m_actBadgeNumberSpin->setVisible(false);
         if (m_actResetBadgeBtn) m_actResetBadgeBtn->setVisible(false);
         if (m_actBlurRadiusLbl) m_actBlurRadiusLbl->setVisible(false);
         if (m_actBlurRadiusSpin) m_actBlurRadiusSpin->setVisible(false);
+
+        if (m_fontFamilyCombo) {
+            m_fontFamilyCombo->blockSignals(true);
+            m_fontFamilyCombo->setCurrentFont(txt->font());
+            m_fontFamilyCombo->blockSignals(false);
+        }
+        if (m_fontSizeSpin) {
+            m_fontSizeSpin->blockSignals(true);
+            m_fontSizeSpin->setValue(txt->font().pointSize() > 0 ? txt->font().pointSize() : 14);
+            m_fontSizeSpin->blockSignals(false);
+        }
 
         if (m_strokeLbl) m_strokeLbl->setText(tr(" Text: "));
         if (m_strokeColorBtn) {
@@ -829,9 +1032,18 @@ void MainWindow::onSceneSelectionChanged() {
         if (m_actFillLbl) m_actFillLbl->setVisible(true);
         if (m_actFillColorBtn) m_actFillColorBtn->setVisible(true);
         if (m_actFontBtn) m_actFontBtn->setVisible(false);
+        if (m_actFontFamilyCombo) m_actFontFamilyCombo->setVisible(false);
+        if (m_actFontSizeLbl) m_actFontSizeLbl->setVisible(false);
+        if (m_actFontSizeSpin) m_actFontSizeSpin->setVisible(false);
+        if (m_fontBtn) m_fontBtn->setVisible(false);
+        if (m_fontFamilyCombo) m_fontFamilyCombo->setVisible(false);
+        if (m_fontSizeLbl) m_fontSizeLbl->setVisible(false);
+        if (m_fontSizeSpin) m_fontSizeSpin->setVisible(false);
         if (m_actWidthLbl) m_actWidthLbl->setVisible(true);
         if (m_actStrokeWidthSpin) m_actStrokeWidthSpin->setVisible(true);
         if (m_actBadgeSeparator) m_actBadgeSeparator->setVisible(false);
+        if (m_actBadgeNumberLbl) m_actBadgeNumberLbl->setVisible(false);
+        if (m_actBadgeNumberSpin) m_actBadgeNumberSpin->setVisible(false);
         if (m_actResetBadgeBtn) m_actResetBadgeBtn->setVisible(false);
         if (m_actBlurRadiusLbl) m_actBlurRadiusLbl->setVisible(false);
         if (m_actBlurRadiusSpin) m_actBlurRadiusSpin->setVisible(false);
@@ -855,15 +1067,67 @@ void MainWindow::onSceneSelectionChanged() {
         m_strokeWidthSpin->blockSignals(true);
         m_strokeWidthSpin->setValue(shape->strokeWidth());
         m_strokeWidthSpin->blockSignals(false);
+    } else if (auto* badge = dynamic_cast<BadgeItem*>(item)) {
+        if (m_actStrokeLbl) {
+            m_strokeLbl->setText(tr(" Color: "));
+            m_actStrokeLbl->setVisible(true);
+        }
+        if (m_actStrokeColorBtn) {
+            m_strokeColorBtn->setToolTip(tr("Badge Color"));
+            m_strokeColorBtn->setStyleSheet(QString("background-color: %1; border: 1px solid #888; border-radius: 3px;").arg(badge->fillColor().name()));
+            m_actStrokeColorBtn->setVisible(true);
+        }
+        if (m_actFillLbl) m_actFillLbl->setVisible(false);
+        if (m_actFillColorBtn) m_actFillColorBtn->setVisible(false);
+        if (m_actFontBtn) m_actFontBtn->setVisible(false);
+        if (m_actFontFamilyCombo) m_actFontFamilyCombo->setVisible(false);
+        if (m_actFontSizeLbl) m_actFontSizeLbl->setVisible(false);
+        if (m_actFontSizeSpin) m_actFontSizeSpin->setVisible(false);
+        if (m_fontBtn) m_fontBtn->setVisible(false);
+        if (m_fontFamilyCombo) m_fontFamilyCombo->setVisible(false);
+        if (m_fontSizeLbl) m_fontSizeLbl->setVisible(false);
+        if (m_fontSizeSpin) m_fontSizeSpin->setVisible(false);
+        if (m_actWidthLbl) m_actWidthLbl->setVisible(false);
+        if (m_actStrokeWidthSpin) m_actStrokeWidthSpin->setVisible(false);
+        if (m_actBlurRadiusLbl) m_actBlurRadiusLbl->setVisible(false);
+        if (m_actBlurRadiusSpin) m_actBlurRadiusSpin->setVisible(false);
+
+        if (m_actBadgeSeparator) m_actBadgeSeparator->setVisible(true);
+        if (m_badgeNumberLbl) {
+            m_badgeNumberLbl->setText(tr("  Badge #: "));
+            m_badgeNumberLbl->setVisible(true);
+        }
+        if (m_actBadgeNumberLbl) m_actBadgeNumberLbl->setVisible(true);
+        if (m_badgeNumberSpin) {
+            m_badgeNumberSpin->blockSignals(true);
+            m_badgeNumberSpin->setValue(badge->number());
+            m_badgeNumberSpin->blockSignals(false);
+            m_badgeNumberSpin->setVisible(true);
+        }
+        if (m_actBadgeNumberSpin) m_actBadgeNumberSpin->setVisible(true);
+        if (m_resetBadgeBtn) {
+            m_resetBadgeBtn->setText(tr("Reset to 1"));
+            m_resetBadgeBtn->setVisible(true);
+        }
+        if (m_actResetBadgeBtn) m_actResetBadgeBtn->setVisible(true);
     } else if (auto* base = dynamic_cast<BaseAnnotationItem*>(item)) {
         if (m_actStrokeLbl) m_actStrokeLbl->setVisible(true);
         if (m_actStrokeColorBtn) m_actStrokeColorBtn->setVisible(true);
         if (m_actFillLbl) m_actFillLbl->setVisible(false);
         if (m_actFillColorBtn) m_actFillColorBtn->setVisible(false);
         if (m_actFontBtn) m_actFontBtn->setVisible(false);
+        if (m_actFontFamilyCombo) m_actFontFamilyCombo->setVisible(false);
+        if (m_actFontSizeLbl) m_actFontSizeLbl->setVisible(false);
+        if (m_actFontSizeSpin) m_actFontSizeSpin->setVisible(false);
+        if (m_fontBtn) m_fontBtn->setVisible(false);
+        if (m_fontFamilyCombo) m_fontFamilyCombo->setVisible(false);
+        if (m_fontSizeLbl) m_fontSizeLbl->setVisible(false);
+        if (m_fontSizeSpin) m_fontSizeSpin->setVisible(false);
         if (m_actWidthLbl) m_actWidthLbl->setVisible(true);
         if (m_actStrokeWidthSpin) m_actStrokeWidthSpin->setVisible(true);
         if (m_actBadgeSeparator) m_actBadgeSeparator->setVisible(false);
+        if (m_actBadgeNumberLbl) m_actBadgeNumberLbl->setVisible(false);
+        if (m_actBadgeNumberSpin) m_actBadgeNumberSpin->setVisible(false);
         if (m_actResetBadgeBtn) m_actResetBadgeBtn->setVisible(false);
         if (m_actBlurRadiusLbl) m_actBlurRadiusLbl->setVisible(false);
         if (m_actBlurRadiusSpin) m_actBlurRadiusSpin->setVisible(false);
@@ -908,24 +1172,64 @@ void MainWindow::updateToolPropertiesVisibility(ToolType tool) {
     bool isBlur = (tool == ToolType::Blur);
     bool isText = (tool == ToolType::Text);
 
-    if (m_actStrokeLbl) m_actStrokeLbl->setVisible(hasStroke);
-    if (m_actStrokeColorBtn) m_actStrokeColorBtn->setVisible(hasStroke);
+    if (m_actStrokeLbl) {
+        m_strokeLbl->setText(isText ? tr(" Text: ") : (isBadge ? tr(" Color: ") : tr(" Stroke: ")));
+        m_actStrokeLbl->setVisible(hasStroke);
+    }
+    if (m_actStrokeColorBtn) {
+        m_strokeColorBtn->setToolTip(isText ? tr("Text Color") : (isBadge ? tr("Badge Color") : tr("Stroke Color")));
+        m_actStrokeColorBtn->setVisible(hasStroke);
+    }
     if (m_actFillLbl) m_actFillLbl->setVisible(hasFill);
     if (m_actFillColorBtn) m_actFillColorBtn->setVisible(hasFill);
     if (m_actFontBtn) m_actFontBtn->setVisible(isText);
+    if (m_actFontFamilyCombo) m_actFontFamilyCombo->setVisible(isText);
+    if (m_actFontSizeLbl) m_actFontSizeLbl->setVisible(isText);
+    if (m_actFontSizeSpin) m_actFontSizeSpin->setVisible(isText);
+    if (m_fontBtn) m_fontBtn->setVisible(isText);
+    if (m_fontFamilyCombo) m_fontFamilyCombo->setVisible(isText);
+    if (m_fontSizeLbl) m_fontSizeLbl->setVisible(isText);
+    if (m_fontSizeSpin) m_fontSizeSpin->setVisible(isText);
+
+    if (isText) {
+        if (m_fontFamilyCombo) {
+            m_fontFamilyCombo->blockSignals(true);
+            m_fontFamilyCombo->setCurrentFont(m_currentFont);
+            m_fontFamilyCombo->blockSignals(false);
+        }
+        if (m_fontSizeSpin) {
+            m_fontSizeSpin->blockSignals(true);
+            m_fontSizeSpin->setValue(m_currentFont.pointSize() > 0 ? m_currentFont.pointSize() : 14);
+            m_fontSizeSpin->blockSignals(false);
+        }
+    }
+
     if (m_actWidthLbl) m_actWidthLbl->setVisible(hasWidth);
     if (m_actStrokeWidthSpin) m_actStrokeWidthSpin->setVisible(hasWidth);
     if (m_actBadgeSeparator) m_actBadgeSeparator->setVisible(isBadge);
+    if (m_badgeNumberLbl) {
+        m_badgeNumberLbl->setText(tr("  Next #: "));
+        m_badgeNumberLbl->setVisible(isBadge);
+    }
+    if (m_actBadgeNumberLbl) m_actBadgeNumberLbl->setVisible(isBadge);
+    if (m_badgeNumberSpin) {
+        if (isBadge) {
+            CanvasScene* scene = currentScene();
+            m_badgeNumberSpin->blockSignals(true);
+            m_badgeNumberSpin->setValue(scene ? scene->badgeCounter() : 1);
+            m_badgeNumberSpin->blockSignals(false);
+        }
+        m_badgeNumberSpin->setVisible(isBadge);
+    }
+    if (m_actBadgeNumberSpin) m_actBadgeNumberSpin->setVisible(isBadge);
+    if (m_resetBadgeBtn) {
+        m_resetBadgeBtn->setText(tr("Reset Numbering (1)"));
+        m_resetBadgeBtn->setVisible(isBadge);
+    }
     if (m_actResetBadgeBtn) m_actResetBadgeBtn->setVisible(isBadge);
     if (m_actBlurRadiusLbl) m_actBlurRadiusLbl->setVisible(isBlur);
     if (m_actBlurRadiusSpin) m_actBlurRadiusSpin->setVisible(isBlur);
 
-    if (m_strokeLbl) {
-        m_strokeLbl->setText(isText ? tr(" Text: ") : tr(" Stroke: "));
-    }
-    if (m_strokeColorBtn) {
-        m_strokeColorBtn->setToolTip(isText ? tr("Text Color") : tr("Stroke Color"));
-    }
     if (m_fillLbl) {
         m_fillLbl->setText(isText ? tr("  Background: ") : tr("  Fill: "));
     }

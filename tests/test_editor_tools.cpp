@@ -18,6 +18,16 @@
 #include "editor/items/ShapeItem.h"
 #include "editor/items/BadgeItem.h"
 #include "editor/items/TextItem.h"
+#include "editor/MainWindow.h"
+#include "core/ClipboardHelper.h"
+#include "capture/ScrollingCaptureDialog.h"
+#include <QLabel>
+#include <QSpinBox>
+#include <QPushButton>
+#include <QFontComboBox>
+#include <QClipboard>
+#include <QMimeData>
+#include <QMenuBar>
 
 class TestScene : public CanvasScene {
 public:
@@ -53,6 +63,12 @@ private slots:
     void testAutoCheckUpdatesSetting();
     void testUpdateManagerVersionComparison();
     void testIconManager();
+    void testBadgeStepperAndResetNumbering();
+    void testMainWindowBadgeIntegration();
+    void testToolbarFontControls();
+    void testClipboardCopyHelper();
+    void testImageStitchingEngine();
+    void testToolbarIconsAndActions();
 };
 
 void TestEditorTools::initTestCase() {
@@ -699,6 +715,441 @@ void TestEditorTools::testIconManager() {
     QVERIFY(!appIcon.pixmap(64, 64).isNull());
     QVERIFY(!appIcon.pixmap(128, 128).isNull());
     QVERIFY(!appIcon.pixmap(256, 256).isNull());
+}
+
+void TestEditorTools::testBadgeStepperAndResetNumbering() {
+    TestScene scene;
+    QPixmap pix(200, 200);
+    pix.fill(Qt::white);
+    scene.setBasePixmap(pix);
+    scene.setCurrentTool(ToolType::Badge);
+
+    // Initial counter should be 1
+    QCOMPARE(scene.badgeCounter(), 1);
+
+    // Track signal emissions
+    int signalCount = 0;
+    int lastCounterEmitted = 0;
+    QObject::connect(&scene, &CanvasScene::badgeCounterChanged, [&](int nextNumber) {
+        signalCount++;
+        lastCounterEmitted = nextNumber;
+    });
+
+    // Place badge 1
+    QGraphicsSceneMouseEvent press1(QEvent::GraphicsSceneMousePress);
+    press1.setScenePos(QPointF(30, 30));
+    press1.setButton(Qt::LeftButton);
+    scene.mousePressEvent(&press1);
+
+    QCOMPARE(scene.badgeCounter(), 2);
+    QCOMPARE(lastCounterEmitted, 2);
+    QCOMPARE(signalCount, 1);
+
+    // Place badge 2
+    QGraphicsSceneMouseEvent press2(QEvent::GraphicsSceneMousePress);
+    press2.setScenePos(QPointF(60, 30));
+    press2.setButton(Qt::LeftButton);
+    scene.mousePressEvent(&press2);
+
+    QCOMPARE(scene.badgeCounter(), 3);
+    QCOMPARE(lastCounterEmitted, 3);
+    QCOMPARE(signalCount, 2);
+
+    // Find the placed badges in the scene
+    QList<BadgeItem*> badges;
+    for (auto* item : scene.items()) {
+        if (auto* b = dynamic_cast<BadgeItem*>(item)) {
+            badges.append(b);
+        }
+    }
+    QCOMPARE(badges.size(), 2);
+    // Badges are in reverse order of addition in scene.items()
+    BadgeItem* b2 = badges[0];
+    BadgeItem* b1 = badges[1];
+    QCOMPARE(b1->number(), 1);
+    QCOMPARE(b2->number(), 2);
+
+    // Test resetBadgeCounter()
+    scene.resetBadgeCounter();
+    QCOMPARE(scene.badgeCounter(), 1);
+    QCOMPARE(lastCounterEmitted, 1);
+    QCOMPARE(signalCount, 3);
+
+    // Place badge after reset: should be 1 again
+    QGraphicsSceneMouseEvent press3(QEvent::GraphicsSceneMousePress);
+    press3.setScenePos(QPointF(90, 30));
+    press3.setButton(Qt::LeftButton);
+    scene.mousePressEvent(&press3);
+
+    QCOMPARE(scene.badgeCounter(), 2);
+    QCOMPARE(lastCounterEmitted, 2);
+
+    // Test setBadgeCounter to custom value (e.g. 50)
+    scene.setBadgeCounter(50);
+    QCOMPARE(scene.badgeCounter(), 50);
+    QCOMPARE(lastCounterEmitted, 50);
+
+    QGraphicsSceneMouseEvent press4(QEvent::GraphicsSceneMousePress);
+    press4.setScenePos(QPointF(120, 30));
+    press4.setButton(Qt::LeftButton);
+    scene.mousePressEvent(&press4);
+
+    QCOMPARE(scene.badgeCounter(), 51);
+
+    // Test modifying badge number with undo/redo
+    scene.modifyBadgeNumber(b1, 99);
+    QCOMPARE(b1->number(), 99);
+
+    scene.undoStack()->undo();
+    QCOMPARE(b1->number(), 1);
+
+    scene.undoStack()->redo();
+    QCOMPARE(b1->number(), 99);
+
+    // Test BadgeItem direct setNumber
+    b1->setNumber(5);
+    QCOMPARE(b1->number(), 5);
+}
+
+void TestEditorTools::testMainWindowBadgeIntegration() {
+    MainWindow win;
+    win.createBlankTab(400, 300);
+    win.resize(900, 500);
+    win.show();
+    QTest::qWait(100);
+
+    // Select badge tool
+    win.selectTool(ToolType::Badge);
+
+    // Check that property toolbar widgets exist and are visible
+    QLabel* badgeLbl = nullptr;
+    QSpinBox* badgeSpin = nullptr;
+    QPushButton* resetBtn = nullptr;
+
+    for (auto* lbl : win.findChildren<QLabel*>()) {
+        if (lbl->text().contains("Next #") || lbl->text().contains("Badge #")) {
+            badgeLbl = lbl;
+            break;
+        }
+    }
+    QVERIFY(badgeLbl != nullptr);
+    QVERIFY(badgeLbl->isVisible());
+
+    for (auto* spin : win.findChildren<QSpinBox*>()) {
+        if (spin->toolTip().contains("Next badge number", Qt::CaseInsensitive)) {
+            badgeSpin = spin;
+            break;
+        }
+    }
+    QVERIFY(badgeSpin != nullptr);
+    QVERIFY(badgeSpin->isVisible());
+    QCOMPARE(badgeSpin->value(), 1);
+
+    for (auto* btn : win.findChildren<QPushButton*>()) {
+        if (btn->text().contains("Reset Numbering") || btn->toolTip().contains("Reset badge number", Qt::CaseInsensitive)) {
+            resetBtn = btn;
+            break;
+        }
+    }
+    QVERIFY(resetBtn != nullptr);
+    QVERIFY(resetBtn->isVisible());
+    QCOMPARE(resetBtn->text(), QString("Reset Numbering (1)"));
+
+    // Place a badge on canvas
+    CanvasScene* scene = win.currentScene();
+    QVERIFY(scene != nullptr);
+
+    QGraphicsSceneMouseEvent press(QEvent::GraphicsSceneMousePress);
+    press.setScenePos(QPointF(100, 100));
+    press.setButton(Qt::LeftButton);
+    // Use TestScene or direct scene mousePressEvent via view
+    win.currentView()->viewport()->show();
+    QTest::mouseClick(win.currentView()->viewport(), Qt::LeftButton, Qt::NoModifier, QPoint(100, 100));
+
+    // After placing 1 badge, the spinbox should automatically increment to 2!
+    QCOMPARE(badgeSpin->value(), 2);
+    QCOMPARE(scene->badgeCounter(), 2);
+
+    // Click Reset Numbering button:
+    resetBtn->click();
+
+    // After clicking reset, counter and spinbox should be 1!
+    QCOMPARE(badgeSpin->value(), 1);
+    QCOMPARE(scene->badgeCounter(), 1);
+
+    // Save a preview snapshot of the editor toolbar to artifacts
+    win.resize(900, 500);
+    win.show();
+    QTest::qWait(100);
+    QPixmap preview = win.grab();
+    preview.save("/home/owner/distrobox-homes/devbox/.gemini/antigravity/brain/e77fcd3f-2a52-4f22-843d-d82ecd75f998/badge_stepper_preview.png");
+
+    // Test selecting the badge item on canvas
+    BadgeItem* placedBadge = nullptr;
+    for (auto* item : scene->items()) {
+        if (auto* b = dynamic_cast<BadgeItem*>(item)) {
+            placedBadge = b;
+            break;
+        }
+    }
+    QVERIFY(placedBadge != nullptr);
+
+    // Switch to Select tool and select the badge
+    win.selectTool(ToolType::Select);
+    scene->clearSelection();
+    placedBadge->setSelected(true);
+    QTest::qWait(100);
+
+    // Toolbar should update to show Badge properties
+    QCOMPARE(badgeLbl->text(), QString("  Badge #: "));
+    QCOMPARE(badgeSpin->value(), 1);
+    QCOMPARE(resetBtn->text(), QString("Reset to 1"));
+    QVERIFY(badgeSpin->isVisible());
+    QVERIFY(resetBtn->isVisible());
+
+    // Modify badge number via spinbox
+    badgeSpin->setValue(42);
+    QCOMPARE(placedBadge->number(), 42);
+
+    // Click Reset to 1 on selected badge
+    resetBtn->click();
+    QCOMPARE(placedBadge->number(), 1);
+    QCOMPARE(badgeSpin->value(), 1);
+
+    // Grab preview of selected badge
+    QPixmap previewSelected = win.grab();
+    previewSelected.save("/home/owner/distrobox-homes/devbox/.gemini/antigravity/brain/e77fcd3f-2a52-4f22-843d-d82ecd75f998/badge_selected_preview.png");
+}
+
+void TestEditorTools::testToolbarFontControls() {
+    MainWindow win;
+    win.createBlankTab(400, 300);
+    win.resize(900, 500);
+    win.show();
+    QTest::qWait(50);
+
+    QFontComboBox* fontCombo = nullptr;
+    QSpinBox* fontSizeSpin = nullptr;
+    QLabel* fontSizeLbl = nullptr;
+
+    for (auto* combo : win.findChildren<QFontComboBox*>()) {
+        fontCombo = combo;
+        break;
+    }
+    for (auto* spin : win.findChildren<QSpinBox*>()) {
+        if (spin->suffix() == " pt" || spin->toolTip().contains("point size", Qt::CaseInsensitive)) {
+            fontSizeSpin = spin;
+            break;
+        }
+    }
+    for (auto* lbl : win.findChildren<QLabel*>()) {
+        if (lbl->text().contains("Size:", Qt::CaseInsensitive)) {
+            fontSizeLbl = lbl;
+            break;
+        }
+    }
+
+    QVERIFY(fontCombo != nullptr);
+    QVERIFY(fontSizeSpin != nullptr);
+    QVERIFY(fontSizeLbl != nullptr);
+
+    // When Pen tool is selected, font controls should be hidden
+    win.selectTool(ToolType::Pen);
+    QVERIFY(!fontCombo->isVisible());
+    QVERIFY(!fontSizeSpin->isVisible());
+    QVERIFY(!fontSizeLbl->isVisible());
+
+    // When Text tool is selected, font controls should be visible
+    win.selectTool(ToolType::Text);
+    QVERIFY(fontCombo->isVisible());
+    QVERIFY(fontSizeSpin->isVisible());
+    QVERIFY(fontSizeLbl->isVisible());
+
+    // Change font size via spinbox
+    fontSizeSpin->setValue(28);
+    QCOMPARE(win.currentScene()->currentFont().pointSize(), 28);
+
+    // Place a TextItem on canvas
+    CanvasScene* scene = win.currentScene();
+    TextItem* textItem = new TextItem("Test Typography", QPointF(50, 50));
+    textItem->setFont(scene->currentFont());
+    scene->addItem(textItem);
+    QCOMPARE(textItem->font().pointSize(), 28);
+
+    // Switch to Select tool and deselect all
+    win.selectTool(ToolType::Select);
+    scene->clearSelection();
+    QTest::qWait(50);
+    QVERIFY(!fontCombo->isVisible());
+    QVERIFY(!fontSizeSpin->isVisible());
+
+    // Now select the TextItem
+    textItem->setSelected(true);
+    QTest::qWait(50);
+    QVERIFY(fontCombo->isVisible());
+    QVERIFY(fontSizeSpin->isVisible());
+    QCOMPARE(fontSizeSpin->value(), 28);
+
+    // Changing spinbox while item is selected updates TextItem
+    fontSizeSpin->setValue(36);
+    QCOMPARE(textItem->font().pointSize(), 36);
+
+    // Deselect item: controls hide again
+    scene->clearSelection();
+    QTest::qWait(50);
+    QVERIFY(!fontCombo->isVisible());
+    QVERIFY(!fontSizeSpin->isVisible());
+}
+
+void TestEditorTools::testClipboardCopyHelper() {
+    // 1. Direct ClipboardHelper unit test
+    QPixmap testPix(80, 60);
+    testPix.fill(QColor(255, 100, 50));
+    bool success = ClipboardHelper::copyImage(testPix);
+    QVERIFY(success);
+
+    const QMimeData* mime = QApplication::clipboard()->mimeData(QClipboard::Clipboard);
+    QVERIFY(mime != nullptr);
+    QVERIFY(mime->hasImage());
+    QVERIFY(mime->hasFormat("image/png"));
+    QVERIFY(mime->hasFormat("image/x-png"));
+    QVERIFY(mime->hasFormat("image/bmp"));
+
+    QByteArray pngData = mime->data("image/png");
+    QVERIFY(!pngData.isEmpty());
+    QImage loaded;
+    QVERIFY(loaded.loadFromData(pngData, "PNG"));
+    QCOMPARE(loaded.width(), 80);
+    QCOMPARE(loaded.height(), 60);
+
+    // 2. Integration with MainWindow full canvas copy
+    MainWindow win;
+    win.createBlankTab(120, 90);
+    win.show();
+    QTest::qWait(50);
+
+    // Draw something on scene (PenItem)
+    CanvasScene* scene = win.currentScene();
+    PenItem* pen = new PenItem(false);
+    pen->setStrokeColor(QColor(0, 255, 0));
+    pen->setStrokeWidth(6);
+    pen->addPoint(QPointF(10, 10));
+    pen->addPoint(QPointF(50, 50));
+    scene->addItem(pen);
+
+    win.copyActiveImageToClipboard();
+    const QMimeData* fullMime = QApplication::clipboard()->mimeData(QClipboard::Clipboard);
+    QVERIFY(fullMime->hasImage());
+    QImage fullImg = qvariant_cast<QImage>(fullMime->imageData());
+    QCOMPARE(fullImg.width(), 120);
+    QCOMPARE(fullImg.height(), 90);
+
+    // 3. Integration with Area Selection crop copy
+    win.selectTool(ToolType::Select);
+    scene->setSelectedArea(QRectF(10, 10, 40, 30));
+    QVERIFY(scene->hasAreaSelection());
+
+    win.copyActiveImageToClipboard();
+    const QMimeData* cropMime = QApplication::clipboard()->mimeData(QClipboard::Clipboard);
+    QVERIFY(cropMime->hasImage());
+    QImage cropImg = qvariant_cast<QImage>(cropMime->imageData());
+    QCOMPARE(cropImg.width(), 40);
+    QCOMPARE(cropImg.height(), 30);
+}
+
+void TestEditorTools::testImageStitchingEngine() {
+    // 1. Identical slices check
+    QImage sliceA(80, 80, QImage::Format_RGB32);
+    sliceA.fill(qRgb(100, 150, 200));
+    QImage sliceB = sliceA.copy();
+    QVERIFY(ScrollingCaptureDialog::areSlicesIdentical(sliceA, sliceB));
+
+    QImage sliceC(80, 80, QImage::Format_RGB32);
+    sliceC.fill(qRgb(20, 30, 40));
+    QVERIFY(!ScrollingCaptureDialog::areSlicesIdentical(sliceA, sliceC));
+
+    // 2. Overlap stitching check
+    int width = 80;
+    int baseH = 100;
+    int nextH = 80;
+    int overlap = 40;
+
+    QImage baseImg(width, baseH, QImage::Format_RGB32);
+    for (int y = 0; y < baseH; ++y) {
+        QRgb col = (y < (baseH - overlap)) ? qRgb(y * 2, 20, 20) : qRgb(20, (y - (baseH - overlap)) * 5, 80);
+        for (int x = 0; x < width; ++x) {
+            baseImg.setPixel(x, y, col);
+        }
+    }
+
+    QImage nextImg(width, nextH, QImage::Format_RGB32);
+    for (int y = 0; y < nextH; ++y) {
+        QRgb col = (y < overlap) ? qRgb(20, y * 5, 80) : qRgb(80, 180, (y - overlap) * 4);
+        for (int x = 0; x < width; ++x) {
+            nextImg.setPixel(x, y, col);
+        }
+    }
+
+    QImage stitched = ScrollingCaptureDialog::stitchImages(baseImg, nextImg);
+    QCOMPARE(stitched.width(), width);
+    // Overlap should be detected and stitched cleanly
+    QVERIFY(stitched.height() > baseH);
+    QCOMPARE(stitched.height(), baseH + (nextH - overlap));
+
+    // Check pixel at seam area
+    QRgb seamPixel = stitched.pixel(10, baseH);
+    QVERIFY(qGreen(seamPixel) > 150);
+}
+
+void TestEditorTools::testToolbarIconsAndActions() {
+    MainWindow win;
+    win.createBlankTab(400, 300);
+    win.show();
+    QTest::qWait(50);
+
+    // Verify all core icon resources can be retrieved and rendered
+    const QStringList iconNames = {
+        "new", "open", "save", "copy", "paste", "undo", "redo",
+        "zoom_in", "zoom_out", "zoom_100", "zoom_fit",
+        "select", "text", "arrow", "pen", "highlighter", "line",
+        "double_arrow", "rect", "ellipse", "badge", "blur", "bucket", "crop",
+        "fullscreen", "snip", "scroll", "picker", "settings", "about", "quit", "s-shot"
+    };
+
+    for (const QString& name : iconNames) {
+        QIcon icon = IconManager::getIcon(name, false, QSize(24, 24));
+        QVERIFY2(!icon.isNull(), qPrintable(QString("Icon is null: %1").arg(name)));
+        QPixmap px = icon.pixmap(24, 24);
+        QVERIFY2(!px.isNull(), qPrintable(QString("Icon pixmap is null: %1").arg(name)));
+        QVERIFY(px.width() >= 24);
+        QVERIFY(px.height() >= 24);
+
+        // Also test light theme version
+        QIcon iconLight = IconManager::getIcon(name, true, QSize(24, 24));
+        QVERIFY2(!iconLight.isNull(), qPrintable(QString("Light icon is null: %1").arg(name)));
+        QPixmap pxLight = iconLight.pixmap(24, 24);
+        QVERIFY2(!pxLight.isNull(), qPrintable(QString("Light icon pixmap is null: %1").arg(name)));
+        QVERIFY(pxLight.width() >= 24);
+        QVERIFY(pxLight.height() >= 24);
+    }
+
+    // Verify menus
+    QMenuBar* mb = win.menuBar();
+    QVERIFY(mb != nullptr);
+    QList<QAction*> topActions = mb->actions();
+    QVERIFY(topActions.size() >= 5); // File, Edit, Capture, View, Options, Help
+
+    bool foundFile = false, foundEdit = false, foundCapture = false, foundView = false;
+    for (auto* act : topActions) {
+        if (act->text().contains("File")) foundFile = true;
+        if (act->text().contains("Edit")) foundEdit = true;
+        if (act->text().contains("Capture")) foundCapture = true;
+        if (act->text().contains("View")) foundView = true;
+    }
+    QVERIFY(foundFile);
+    QVERIFY(foundEdit);
+    QVERIFY(foundCapture);
+    QVERIFY(foundView);
 }
 
 int main(int argc, char** argv) {

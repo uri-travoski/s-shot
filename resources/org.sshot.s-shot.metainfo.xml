@@ -17,6 +17,7 @@
     <binary>s-shot</binary>
   </provides>
   <releases>
+    <release version="1.24" date="2026-10-07"/>
     <release version="1.23" date="2026-10-07"/>
     <release version="1.22" date="2026-10-07"/>
     <release version="1.21" date="2026-10-07"/>

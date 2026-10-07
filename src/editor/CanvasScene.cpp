@@ -1,13 +1,42 @@
 #include "CanvasScene.h"
 #include <QGraphicsSceneMouseEvent>
+#include <QGraphicsSceneContextMenuEvent>
+#include <QMenu>
+#include <QAction>
 #include <QKeyEvent>
 #include <QPainter>
 #include <QInputDialog>
 #include <QClipboard>
 #include <QGuiApplication>
 #include <QDebug>
+#include "../core/ClipboardHelper.h"
 
 // --- Undo Commands ---
+
+class SetBadgeNumberCommand : public QUndoCommand {
+public:
+    SetBadgeNumberCommand(CanvasScene* scene, BadgeItem* item, int oldNum, int newNum, QUndoCommand* parent = nullptr)
+        : QUndoCommand(parent), m_scene(scene), m_item(item), m_oldNum(oldNum), m_newNum(newNum) {
+        setText(QString("Change Badge Number %1 -> %2").arg(oldNum).arg(newNum));
+    }
+    void undo() override {
+        if (m_item) {
+            m_item->setNumber(m_oldNum);
+            emit m_scene->sceneModified();
+        }
+    }
+    void redo() override {
+        if (m_item) {
+            m_item->setNumber(m_newNum);
+            emit m_scene->sceneModified();
+        }
+    }
+private:
+    CanvasScene* m_scene;
+    BadgeItem* m_item;
+    int m_oldNum;
+    int m_newNum;
+};
 
 class AddItemCommand : public QUndoCommand {
 public:
@@ -104,6 +133,7 @@ QPixmap CanvasScene::renderToPixmap() const {
     }
 
     // Deselect items temporarily for clean render
+    bool oldBlock = const_cast<CanvasScene*>(this)->blockSignals(true);
     QList<QGraphicsItem*> selected = selectedItems();
     for (auto* item : selected) item->setSelected(false);
 
@@ -114,6 +144,7 @@ QPixmap CanvasScene::renderToPixmap() const {
     if (hasAreaSelection() && m_areaSelectionRectItem) {
         m_areaSelectionRectItem->setVisible(true);
     }
+    const_cast<CanvasScene*>(this)->blockSignals(oldBlock);
 
     return result;
 }
@@ -136,6 +167,15 @@ void CanvasScene::setCurrentTool(ToolType tool) {
     }
 }
 
+void CanvasScene::setSelectedArea(const QRectF& rect) {
+    m_selectedArea = rect;
+    if (m_areaSelectionRectItem) {
+        m_areaSelectionRectItem->setRect(rect);
+        m_areaSelectionRectItem->setVisible(!rect.isNull() && rect.width() > 2 && rect.height() > 2);
+    }
+    emit areaSelectionChanged(m_selectedArea, hasAreaSelection());
+}
+
 void CanvasScene::clearAreaSelection() {
     m_selectedArea = QRectF();
     if (m_areaSelectionRectItem) {
@@ -150,7 +190,7 @@ void CanvasScene::copySelectedArea() {
     QRect cropRect = m_selectedArea.toRect().intersected(fullPix.rect());
     if (!cropRect.isEmpty()) {
         QPixmap sub = fullPix.copy(cropRect);
-        QGuiApplication::clipboard()->setPixmap(sub);
+        ClipboardHelper::copyImage(sub);
     }
 }
 
@@ -568,10 +608,12 @@ void CanvasScene::createNewItem(const QPointF& pos) {
         break;
     }
     case ToolType::Badge: {
-        BadgeItem* badge = new BadgeItem(m_badgeCounter++, pos);
+        int num = m_badgeCounter++;
+        BadgeItem* badge = new BadgeItem(num, pos);
         badge->setStrokeColor(m_strokeColor);
         badge->setFillColor(m_strokeColor);
         m_undoStack.push(new AddItemCommand(this, badge));
+        emit badgeCounterChanged(m_badgeCounter);
         emit sceneModified();
         m_activeItem = nullptr;
         m_isDrawing = false;
@@ -665,4 +707,45 @@ void CanvasScene::finishActiveItem() {
     m_undoStack.push(new AddItemCommand(this, m_activeItem));
     m_activeItem = nullptr;
     emit sceneModified();
+}
+
+void CanvasScene::setBadgeCounter(int n) {
+    m_badgeCounter = qMax(1, n);
+    emit badgeCounterChanged(m_badgeCounter);
+}
+
+void CanvasScene::resetBadgeCounter() {
+    m_badgeCounter = 1;
+    emit badgeCounterChanged(1);
+}
+
+void CanvasScene::modifyBadgeNumber(BadgeItem* badge, int newNumber) {
+    if (!badge || badge->number() == newNumber) return;
+    m_undoStack.push(new SetBadgeNumberCommand(this, badge, badge->number(), newNumber));
+}
+
+void CanvasScene::contextMenuEvent(QGraphicsSceneContextMenuEvent* event) {
+    QGraphicsScene::contextMenuEvent(event);
+    if (event->isAccepted()) {
+        return;
+    }
+
+    if (m_currentTool == ToolType::Badge) {
+        QMenu menu;
+        QAction* actReset = menu.addAction(tr("Reset Badge Numbering to 1"));
+        QAction* actSet = menu.addAction(tr("Set Next Badge Number..."));
+
+        QAction* chosen = menu.exec(event->screenPos());
+        if (chosen == actReset) {
+            resetBadgeCounter();
+            event->accept();
+        } else if (chosen == actSet) {
+            bool ok = false;
+            int n = QInputDialog::getInt(nullptr, tr("Set Next Badge Number"), tr("Next Badge Number:"), m_badgeCounter, 1, 9999, 1, &ok);
+            if (ok) {
+                setBadgeCounter(n);
+            }
+            event->accept();
+        }
+    }
 }

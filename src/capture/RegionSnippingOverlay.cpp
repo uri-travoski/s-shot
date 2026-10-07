@@ -264,6 +264,7 @@ void RegionSnippingOverlay::mouseReleaseEvent(QMouseEvent* event) {
                 qBound(1, static_cast<int>(std::round(m_selectedRect.width() * scaleX)), m_screenGrab.width()),
                 qBound(1, static_cast<int>(std::round(m_selectedRect.height() * scaleY)), m_screenGrab.height())
             );
+            m_selectedPhysRect = cropPhys;
             QPixmap cropped = m_screenGrab.copy(cropPhys.intersected(m_screenGrab.rect()));
 
             hide();
@@ -295,6 +296,7 @@ void RegionSnippingOverlay::keyPressEvent(QKeyEvent* event) {
             qBound(1, static_cast<int>(std::round(m_selectedRect.width() * scaleX)), m_screenGrab.width()),
             qBound(1, static_cast<int>(std::round(m_selectedRect.height() * scaleY)), m_screenGrab.height())
         );
+        m_selectedPhysRect = cropPhys;
         QPixmap cropped = m_screenGrab.copy(cropPhys.intersected(m_screenGrab.rect()));
         hide();
         if (!cropped.isNull() && cropped.width() > 0 && cropped.height() > 0) {

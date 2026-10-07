@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(s-shot
-    VERSION 1.23.0
+    VERSION 1.24.0
     DESCRIPTION "Lightweight Screenshot & Annotation Tool for Linux"
     LANGUAGES CXX
 )
@@ -22,6 +22,7 @@ set(SOURCES
     src/core/HotkeyManager.cpp
     src/core/UpdateManager.cpp
     src/core/IconManager.cpp
+    src/core/ClipboardHelper.cpp
     src/tray/TrayManager.cpp
     src/capture/CaptureManager.cpp
     src/capture/RegionSnippingOverlay.cpp
@@ -61,6 +62,7 @@ target_link_libraries(s-shot PRIVATE
     Qt6::Widgets
     Qt6::Svg Qt6::Network
     ${X11_LIBRARIES}
+    ${X11_Xtst_LIB}
 )
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
@@ -72,9 +74,16 @@ enable_testing()
 add_executable(test_editor_tools
     tests/test_editor_tools.cpp
     src/core/SettingsManager.cpp
+    src/core/HotkeyManager.cpp
     src/core/UpdateManager.cpp
     src/core/IconManager.cpp
+    src/core/ClipboardHelper.cpp
+    src/tray/TrayManager.cpp
+    src/capture/CaptureManager.cpp
     src/capture/RegionSnippingOverlay.cpp
+    src/capture/ScrollingCaptureDialog.cpp
+    src/capture/ColorPickerOverlay.cpp
+    src/editor/MainWindow.cpp
     src/editor/CanvasView.cpp
     src/editor/CanvasScene.cpp
     src/editor/items/BaseAnnotationItem.cpp
@@ -84,14 +93,19 @@ add_executable(test_editor_tools
     src/editor/items/BadgeItem.cpp
     src/editor/items/TextItem.cpp
     src/editor/items/BlurItem.cpp
+    src/dialogs/SettingsDialog.cpp
+    src/dialogs/AboutDialog.cpp
     resources/resources.qrc
 )
 target_include_directories(test_editor_tools PRIVATE
     src
     src/core
+    src/tray
     src/capture
     src/editor
     src/editor/items
+    src/dialogs
+    ${X11_INCLUDE_DIR}
 )
 target_link_libraries(test_editor_tools PRIVATE
     Qt6::Core
@@ -100,6 +114,8 @@ target_link_libraries(test_editor_tools PRIVATE
     Qt6::Svg
     Qt6::Network
     Qt6::Test
+    ${X11_LIBRARIES}
+    ${X11_Xtst_LIB}
 )
 add_test(NAME test_editor_tools COMMAND test_editor_tools)
 

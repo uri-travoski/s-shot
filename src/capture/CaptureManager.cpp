@@ -87,7 +87,11 @@ void CaptureManager::pickColor() {
 void CaptureManager::onRegionCaptured(const QPixmap& pixmap) {
     if (m_isSelectingForScrolling) {
         m_isSelectingForScrolling = false;
-        scrollingDialog()->startWithRegion(QRect(50, 50, pixmap.width(), pixmap.height()), pixmap);
+        QRect targetRect = regionOverlay()->selectedRect();
+        if (targetRect.isEmpty() || targetRect.width() < 10 || targetRect.height() < 10) {
+            targetRect = QRect(50, 50, pixmap.width(), pixmap.height());
+        }
+        scrollingDialog()->startWithRegion(targetRect, pixmap);
         return;
     }
 
