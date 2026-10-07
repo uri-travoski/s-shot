@@ -1,4 +1,5 @@
 #include "AboutDialog.h"
+#include "../core/IconManager.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QIcon>
@@ -20,13 +21,13 @@ AboutDialog::AboutDialog(QWidget* parent)
 
     QHBoxLayout* headerLayout = new QHBoxLayout();
     QLabel* iconLabel = new QLabel(this);
-    iconLabel->setPixmap(QIcon(":/icons/s-shot.svg").pixmap(64, 64));
+    iconLabel->setPixmap(IconManager::getAppIcon().pixmap(64, 64));
     headerLayout->addWidget(iconLabel);
 
     QVBoxLayout* titleLayout = new QVBoxLayout();
     QLabel* nameLabel = new QLabel("S-Shot", this);
     nameLabel->setStyleSheet("font-size: 22px; font-weight: bold; color: #30e500;");
-    QLabel* verLabel = new QLabel(tr("Version 1.21 (Linux x86_64)"), this);
+    QLabel* verLabel = new QLabel(tr("Version 1.22 (Linux x86_64)"), this);
     verLabel->setStyleSheet("font-size: 12px; color: #aaaaaa;");
     titleLayout->addWidget(nameLabel);
     titleLayout->addWidget(verLabel);

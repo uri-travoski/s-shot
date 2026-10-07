@@ -4,11 +4,14 @@
 #include <QLocalSocket>
 #include <QIcon>
 #include <QDebug>
+#include <QTimer>
 #include <memory>
 #include <malloc.h>
 
 #include "core/SettingsManager.h"
 #include "core/HotkeyManager.h"
+#include "core/UpdateManager.h"
+#include "core/IconManager.h"
 #include "tray/TrayManager.h"
 #include "capture/CaptureManager.h"
 #include "editor/MainWindow.h"
@@ -17,9 +20,9 @@ int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
     app.setApplicationName("s-shot");
     app.setApplicationDisplayName("S-Shot");
-    app.setApplicationVersion("1.21");
+    app.setApplicationVersion("1.22");
     app.setOrganizationName("S-Shot");
-    app.setWindowIcon(QIcon(":/icons/s-shot.svg"));
+    app.setWindowIcon(IconManager::getAppIcon());
 
     const QString serverName = "s-shot-single-instance-socket";
     QLocalSocket socket;
@@ -56,6 +59,9 @@ int main(int argc, char* argv[]) {
 
     QCommandLineOption colorpickerOption("colorpicker", "Pick color from screen immediately.");
     parser.addOption(colorpickerOption);
+
+    QCommandLineOption settingsOption("settings", "Open settings dialog.");
+    parser.addOption(settingsOption);
 
     parser.addPositionalArgument("file", "Image file to open", "[file]");
     parser.process(app);
@@ -136,6 +142,10 @@ int main(int argc, char* argv[]) {
                     win->show();
                     win->raise();
                     win->activateWindow();
+                } else if (token == "--settings") {
+                    MainWindow* win = getMainWindow();
+                    win->show();
+                    win->openSettingsDialog();
                 } else if (!token.startsWith("--")) {
                     MainWindow* win = getMainWindow();
                     win->openImage(token);
@@ -161,12 +171,22 @@ int main(int argc, char* argv[]) {
     } else if (parser.isSet(editorOption)) {
         MainWindow* win = getMainWindow();
         win->show();
+    } else if (parser.isSet(settingsOption)) {
+        MainWindow* win = getMainWindow();
+        win->show();
+        win->openSettingsDialog();
     } else if (parser.isSet(trayOption)) {
         // Run purely in tray
     } else {
         // Default interactive start: open editor
         MainWindow* win = getMainWindow();
         win->show();
+    }
+
+    if (SettingsManager::instance().autoCheckUpdates()) {
+        QTimer::singleShot(3000, []() {
+            UpdateManager::instance().checkForUpdates(true /* silentIfUpToDate */);
+        });
     }
 
     return app.exec();

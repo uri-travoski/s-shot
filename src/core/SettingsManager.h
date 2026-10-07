@@ -36,6 +36,9 @@ public:
     bool runInTrayOnClose() const { return m_runInTrayOnClose; }
     void setRunInTrayOnClose(bool val) { m_runInTrayOnClose = val; }
 
+    bool autoCheckUpdates() const { return m_autoCheckUpdates; }
+    void setAutoCheckUpdates(bool val) { m_autoCheckUpdates = val; }
+
     // Theme (Dark / Light (Grey UI))
     QString theme() const { return m_theme; }
     void setTheme(const QString& val) { m_theme = val; }
@@ -77,6 +80,7 @@ private:
     bool m_autoCopyToClipboard = true;
     bool m_openEditorAfterCapture = true;
     bool m_runInTrayOnClose = true;
+    bool m_autoCheckUpdates = true;
     QString m_theme = "Light";
 
     QString m_hotkeyFullscreen = "Ctrl+Shift+Print";

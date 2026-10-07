@@ -7,6 +7,7 @@
 #include <QComboBox>
 #include <QSpinBox>
 #include <QTabWidget>
+#include <QLabel>
 
 class SettingsDialog : public QDialog {
     Q_OBJECT
@@ -17,6 +18,8 @@ public:
 private slots:
     void browseSaveLocation();
     void saveSettings();
+    void onCheckForUpdatesClicked();
+    void onAutoUpdateCheckClicked();
 
 private:
     void loadSettings();
@@ -31,6 +34,10 @@ private:
     QComboBox* m_formatCombo = nullptr;
     QCheckBox* m_autoCopyCheck = nullptr;
     QCheckBox* m_openEditorCheck = nullptr;
+    QCheckBox* m_autoCheckUpdatesCheck = nullptr;
+    QPushButton* m_checkForUpdatesBtn = nullptr;
+    QPushButton* m_autoUpdateCheckBtn = nullptr;
+    QLabel* m_updateStatusLabel = nullptr;
 
     // Hotkeys tab
     QLineEdit* m_hotkeyFullscreenEdit = nullptr;

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(s-shot
-    VERSION 1.21.0
+    VERSION 1.22.0
     DESCRIPTION "Lightweight Screenshot & Annotation Tool for Linux"
     LANGUAGES CXX
 )
@@ -20,6 +20,8 @@ set(SOURCES
     src/main.cpp
     src/core/SettingsManager.cpp
     src/core/HotkeyManager.cpp
+    src/core/UpdateManager.cpp
+    src/core/IconManager.cpp
     src/tray/TrayManager.cpp
     src/capture/CaptureManager.cpp
     src/capture/RegionSnippingOverlay.cpp
@@ -70,6 +72,8 @@ enable_testing()
 add_executable(test_editor_tools
     tests/test_editor_tools.cpp
     src/core/SettingsManager.cpp
+    src/core/UpdateManager.cpp
+    src/core/IconManager.cpp
     src/capture/RegionSnippingOverlay.cpp
     src/editor/CanvasView.cpp
     src/editor/CanvasScene.cpp
@@ -80,6 +84,7 @@ add_executable(test_editor_tools
     src/editor/items/BadgeItem.cpp
     src/editor/items/TextItem.cpp
     src/editor/items/BlurItem.cpp
+    resources/resources.qrc
 )
 target_include_directories(test_editor_tools PRIVATE
     src
@@ -92,6 +97,8 @@ target_link_libraries(test_editor_tools PRIVATE
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets
+    Qt6::Svg
+    Qt6::Network
     Qt6::Test
 )
 add_test(NAME test_editor_tools COMMAND test_editor_tools)
@@ -111,6 +118,14 @@ install(FILES resources/icons/s-shot.svg
     DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps
 )
 
+foreach(SZ 16x16 22x22 24x24 32x32 48x48 64x64 128x128 256x256)
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/resources/icons/hicolor/${SZ}/apps/s-shot.png")
+        install(FILES resources/icons/hicolor/${SZ}/apps/s-shot.png
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/${SZ}/apps
+        )
+    endif()
+endforeach()
+
 # CPack configuration
 set(CPACK_PACKAGE_NAME "s-shot")
 set(CPACK_PACKAGE_VENDOR "S-Shot")
@@ -125,6 +140,10 @@ set(CPACK_DEBIAN_PACKAGE_MAINTAINER "S-Shot Developer <support@example.com>")
 set(CPACK_DEBIAN_PACKAGE_SECTION "graphics")
 set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
 set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "qt6-svg-plugins, libqt6svg6")
+set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
+    "${CMAKE_CURRENT_SOURCE_DIR}/packaging/debian/postinst;${CMAKE_CURRENT_SOURCE_DIR}/packaging/debian/postrm"
+)
 
 # RPM packaging
 set(CPACK_RPM_PACKAGE_LICENSE "GPLv3+")

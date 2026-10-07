@@ -69,5 +69,14 @@
     <file>icons/light/quit.svg</file>
     <file>icons/light/paste.svg</file>
     <file>icons/light/move.svg</file>
+
+    <file>icons/hicolor/16x16/apps/s-shot.png</file>
+    <file>icons/hicolor/22x22/apps/s-shot.png</file>
+    <file>icons/hicolor/24x24/apps/s-shot.png</file>
+    <file>icons/hicolor/32x32/apps/s-shot.png</file>
+    <file>icons/hicolor/48x48/apps/s-shot.png</file>
+    <file>icons/hicolor/64x64/apps/s-shot.png</file>
+    <file>icons/hicolor/128x128/apps/s-shot.png</file>
+    <file>icons/hicolor/256x256/apps/s-shot.png</file>
 </qresource>
 </RCC>

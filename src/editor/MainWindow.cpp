@@ -1,5 +1,7 @@
 #include "MainWindow.h"
 #include "../core/SettingsManager.h"
+#include "../core/UpdateManager.h"
+#include "../core/IconManager.h"
 #include "../capture/CaptureManager.h"
 #include "../dialogs/SettingsDialog.h"
 #include "../dialogs/AboutDialog.h"
@@ -19,7 +21,7 @@ MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
 {
     setWindowTitle("S-Shot");
-    setWindowIcon(QIcon(":/icons/s-shot.svg"));
+    setWindowIcon(IconManager::getAppIcon());
     resize(1020, 720);
 
     m_tabWidget = new QTabWidget(this);
@@ -114,12 +116,7 @@ void MainWindow::applyTheme(const QString& theme) {
 
     // Update icons for all registered actions
     for (const auto& item : m_themedActions) {
-        QString iconPath = isLight ? QString(":/icons/light/%1.svg").arg(item.iconName)
-                                   : QString(":/icons/%1.svg").arg(item.iconName);
-        if (!QFile::exists(iconPath)) {
-            iconPath = QString(":/icons/%1.svg").arg(item.iconName);
-        }
-        item.action->setIcon(QIcon(iconPath));
+        item.action->setIcon(IconManager::getIcon(item.iconName, isLight));
     }
 
     // Apply theme to all tabs
@@ -140,80 +137,83 @@ void MainWindow::setupMenus() {
 
     // File Menu
     QMenu* fileMenu = mb->addMenu(tr("&File"));
-    QAction* actNew = fileMenu->addAction(QIcon(":/icons/new.svg"), tr("&New Tab"), QKeySequence::New, this, [this]() { createBlankTab(); });
+    QAction* actNew = fileMenu->addAction(IconManager::getIcon("new"), tr("&New Tab"), QKeySequence::New, this, [this]() { createBlankTab(); });
     registerAct(actNew, "new");
 
-    QAction* actOpen = fileMenu->addAction(QIcon(":/icons/open.svg"), tr("&Open..."), QKeySequence::Open, this, &MainWindow::openFileDialog);
+    QAction* actOpen = fileMenu->addAction(IconManager::getIcon("open"), tr("&Open..."), QKeySequence::Open, this, &MainWindow::openFileDialog);
     registerAct(actOpen, "open");
 
-    QAction* actSave = fileMenu->addAction(QIcon(":/icons/save.svg"), tr("&Save"), QKeySequence::Save, this, &MainWindow::saveActiveTab);
+    QAction* actSave = fileMenu->addAction(IconManager::getIcon("save"), tr("&Save"), QKeySequence::Save, this, &MainWindow::saveActiveTab);
     registerAct(actSave, "save");
 
-    QAction* actSaveAs = fileMenu->addAction(QIcon(":/icons/save.svg"), tr("Save &As..."), QKeySequence::SaveAs, this, &MainWindow::saveActiveTabAs);
+    QAction* actSaveAs = fileMenu->addAction(IconManager::getIcon("save"), tr("Save &As..."), QKeySequence::SaveAs, this, &MainWindow::saveActiveTabAs);
     registerAct(actSaveAs, "save");
 
     fileMenu->addSeparator();
 
-    QAction* actCloseTray = fileMenu->addAction(QIcon(":/icons/s-shot.svg"), tr("Close to &Tray"), this, &MainWindow::hide);
+    QAction* actCloseTray = fileMenu->addAction(IconManager::getIcon("s-shot"), tr("Close to &Tray"), this, &MainWindow::hide);
     registerAct(actCloseTray, "s-shot");
 
     fileMenu->addSeparator();
 
-    QAction* actQuit = fileMenu->addAction(QIcon(":/icons/quit.svg"), tr("&Quit S-Shot"), QKeySequence::Quit, qApp, &QCoreApplication::quit);
+    QAction* actQuit = fileMenu->addAction(IconManager::getIcon("quit"), tr("&Quit S-Shot"), QKeySequence::Quit, qApp, &QCoreApplication::quit);
     registerAct(actQuit, "quit");
 
     // Edit Menu
     QMenu* editMenu = mb->addMenu(tr("&Edit"));
-    QAction* actUndo = editMenu->addAction(QIcon(":/icons/undo.svg"), tr("&Undo"), QKeySequence::Undo, this, &MainWindow::onUndo);
+    QAction* actUndo = editMenu->addAction(IconManager::getIcon("undo"), tr("&Undo"), QKeySequence::Undo, this, &MainWindow::onUndo);
     registerAct(actUndo, "undo");
 
-    QAction* actRedo = editMenu->addAction(QIcon(":/icons/redo.svg"), tr("&Redo"), QKeySequence::Redo, this, &MainWindow::onRedo);
+    QAction* actRedo = editMenu->addAction(IconManager::getIcon("redo"), tr("&Redo"), QKeySequence::Redo, this, &MainWindow::onRedo);
     registerAct(actRedo, "redo");
 
     editMenu->addSeparator();
 
-    QAction* actCopy = editMenu->addAction(QIcon(":/icons/copy.svg"), tr("&Copy Image"), QKeySequence::Copy, this, &MainWindow::copyActiveImageToClipboard);
+    QAction* actCopy = editMenu->addAction(IconManager::getIcon("copy"), tr("&Copy Image"), QKeySequence::Copy, this, &MainWindow::copyActiveImageToClipboard);
     registerAct(actCopy, "copy");
 
-    QAction* actPaste = editMenu->addAction(QIcon(":/icons/paste.svg"), tr("&Paste"), QKeySequence::Paste, this, &MainWindow::pasteFromClipboard);
+    QAction* actPaste = editMenu->addAction(IconManager::getIcon("paste"), tr("&Paste"), QKeySequence::Paste, this, &MainWindow::pasteFromClipboard);
     registerAct(actPaste, "paste");
 
     // Capture Menu
     QMenu* capMenu = mb->addMenu(tr("&Capture"));
-    QAction* actCapFull = capMenu->addAction(QIcon(":/icons/fullscreen.svg"), tr("Capture &Fullscreen"), this, &MainWindow::onCaptureFullscreen);
+    QAction* actCapFull = capMenu->addAction(IconManager::getIcon("fullscreen"), tr("Capture &Fullscreen"), this, &MainWindow::onCaptureFullscreen);
     registerAct(actCapFull, "fullscreen");
 
-    QAction* actCapRegion = capMenu->addAction(QIcon(":/icons/snip.svg"), tr("Capture &Selected Region"), this, &MainWindow::onCaptureRegion);
+    QAction* actCapRegion = capMenu->addAction(IconManager::getIcon("snip"), tr("Capture &Selected Region"), this, &MainWindow::onCaptureRegion);
     registerAct(actCapRegion, "snip");
 
-    QAction* actCapScroll = capMenu->addAction(QIcon(":/icons/scroll.svg"), tr("Capture &Scrolling Window"), this, &MainWindow::onCaptureScrolling);
+    QAction* actCapScroll = capMenu->addAction(IconManager::getIcon("scroll"), tr("Capture &Scrolling Window"), this, &MainWindow::onCaptureScrolling);
     registerAct(actCapScroll, "scroll");
 
-    QAction* actCapColor = capMenu->addAction(QIcon(":/icons/picker.svg"), tr("Colour &Picker"), this, &MainWindow::onColorPicker);
+    QAction* actCapColor = capMenu->addAction(IconManager::getIcon("picker"), tr("Colour &Picker"), this, &MainWindow::onColorPicker);
     registerAct(actCapColor, "picker");
 
     // View Menu
     QMenu* viewMenu = mb->addMenu(tr("&View"));
-    QAction* actZoomIn = viewMenu->addAction(QIcon(":/icons/zoom_in.svg"), tr("Zoom &In"), QKeySequence::ZoomIn, this, [this]() { if (currentView()) currentView()->zoomIn(); });
+    QAction* actZoomIn = viewMenu->addAction(IconManager::getIcon("zoom_in"), tr("Zoom &In"), QKeySequence::ZoomIn, this, [this]() { if (currentView()) currentView()->zoomIn(); });
     registerAct(actZoomIn, "zoom_in");
 
-    QAction* actZoomOut = viewMenu->addAction(QIcon(":/icons/zoom_out.svg"), tr("Zoom &Out"), QKeySequence::ZoomOut, this, [this]() { if (currentView()) currentView()->zoomOut(); });
+    QAction* actZoomOut = viewMenu->addAction(IconManager::getIcon("zoom_out"), tr("Zoom &Out"), QKeySequence::ZoomOut, this, [this]() { if (currentView()) currentView()->zoomOut(); });
     registerAct(actZoomOut, "zoom_out");
 
-    QAction* actZoom100 = viewMenu->addAction(QIcon(":/icons/zoom_100.svg"), tr("&Actual Size (100%)"), this, [this]() { if (currentView()) currentView()->zoomActual(); });
+    QAction* actZoom100 = viewMenu->addAction(IconManager::getIcon("zoom_100"), tr("&Actual Size (100%)"), this, [this]() { if (currentView()) currentView()->zoomActual(); });
     registerAct(actZoom100, "zoom_100");
 
-    QAction* actZoomFit = viewMenu->addAction(QIcon(":/icons/zoom_fit.svg"), tr("&Fit to Window"), this, [this]() { if (currentView()) currentView()->zoomFit(); });
+    QAction* actZoomFit = viewMenu->addAction(IconManager::getIcon("zoom_fit"), tr("&Fit to Window"), this, [this]() { if (currentView()) currentView()->zoomFit(); });
     registerAct(actZoomFit, "zoom_fit");
 
     // Options Menu
     QMenu* optMenu = mb->addMenu(tr("&Options"));
-    QAction* actSettings = optMenu->addAction(QIcon(":/icons/settings.svg"), tr("&Settings..."), this, &MainWindow::openSettingsDialog);
+    QAction* actSettings = optMenu->addAction(IconManager::getIcon("settings"), tr("&Settings..."), this, &MainWindow::openSettingsDialog);
     registerAct(actSettings, "settings");
 
     // Help Menu
     QMenu* helpMenu = mb->addMenu(tr("&Help"));
-    QAction* actAbout = helpMenu->addAction(QIcon(":/icons/about.svg"), tr("&About S-Shot"), this, &MainWindow::openAboutDialog);
+    QAction* actCheckUpdates = helpMenu->addAction(tr("Check for &Updates..."), this, [this]() {
+        UpdateManager::instance().checkForUpdates(false, this);
+    });
+    QAction* actAbout = helpMenu->addAction(IconManager::getIcon("about"), tr("&About S-Shot"), this, &MainWindow::openAboutDialog);
     registerAct(actAbout, "about");
 }
 
@@ -227,38 +227,38 @@ void MainWindow::setupToolbars() {
     m_mainToolBar->setMovable(false);
     m_mainToolBar->setIconSize(QSize(20, 20));
 
-    QAction* tbNew = m_mainToolBar->addAction(QIcon(":/icons/new.svg"), tr("New"), this, [this]() { createBlankTab(); });
+    QAction* tbNew = m_mainToolBar->addAction(IconManager::getIcon("new"), tr("New"), this, [this]() { createBlankTab(); });
     registerAct(tbNew, "new");
 
-    QAction* tbOpen = m_mainToolBar->addAction(QIcon(":/icons/open.svg"), tr("Open"), this, &MainWindow::openFileDialog);
+    QAction* tbOpen = m_mainToolBar->addAction(IconManager::getIcon("open"), tr("Open"), this, &MainWindow::openFileDialog);
     registerAct(tbOpen, "open");
 
-    QAction* tbSave = m_mainToolBar->addAction(QIcon(":/icons/save.svg"), tr("Save"), this, &MainWindow::saveActiveTab);
+    QAction* tbSave = m_mainToolBar->addAction(IconManager::getIcon("save"), tr("Save"), this, &MainWindow::saveActiveTab);
     registerAct(tbSave, "save");
 
-    QAction* tbCopy = m_mainToolBar->addAction(QIcon(":/icons/copy.svg"), tr("Copy"), this, &MainWindow::copyActiveImageToClipboard);
+    QAction* tbCopy = m_mainToolBar->addAction(IconManager::getIcon("copy"), tr("Copy"), this, &MainWindow::copyActiveImageToClipboard);
     registerAct(tbCopy, "copy");
 
     m_mainToolBar->addSeparator();
 
-    QAction* tbUndo = m_mainToolBar->addAction(QIcon(":/icons/undo.svg"), tr("Undo"), this, &MainWindow::onUndo);
+    QAction* tbUndo = m_mainToolBar->addAction(IconManager::getIcon("undo"), tr("Undo"), this, &MainWindow::onUndo);
     registerAct(tbUndo, "undo");
 
-    QAction* tbRedo = m_mainToolBar->addAction(QIcon(":/icons/redo.svg"), tr("Redo"), this, &MainWindow::onRedo);
+    QAction* tbRedo = m_mainToolBar->addAction(IconManager::getIcon("redo"), tr("Redo"), this, &MainWindow::onRedo);
     registerAct(tbRedo, "redo");
 
     m_mainToolBar->addSeparator();
 
-    QAction* tbZoomIn = m_mainToolBar->addAction(QIcon(":/icons/zoom_in.svg"), tr("Zoom In"), this, [this]() { if (currentView()) currentView()->zoomIn(); });
+    QAction* tbZoomIn = m_mainToolBar->addAction(IconManager::getIcon("zoom_in"), tr("Zoom In"), this, [this]() { if (currentView()) currentView()->zoomIn(); });
     registerAct(tbZoomIn, "zoom_in");
 
-    QAction* tbZoomOut = m_mainToolBar->addAction(QIcon(":/icons/zoom_out.svg"), tr("Zoom Out"), this, [this]() { if (currentView()) currentView()->zoomOut(); });
+    QAction* tbZoomOut = m_mainToolBar->addAction(IconManager::getIcon("zoom_out"), tr("Zoom Out"), this, [this]() { if (currentView()) currentView()->zoomOut(); });
     registerAct(tbZoomOut, "zoom_out");
 
-    QAction* tbZoom100 = m_mainToolBar->addAction(QIcon(":/icons/zoom_100.svg"), tr("100%"), this, [this]() { if (currentView()) currentView()->zoomActual(); });
+    QAction* tbZoom100 = m_mainToolBar->addAction(IconManager::getIcon("zoom_100"), tr("100%"), this, [this]() { if (currentView()) currentView()->zoomActual(); });
     registerAct(tbZoom100, "zoom_100");
 
-    QAction* tbZoomFit = m_mainToolBar->addAction(QIcon(":/icons/zoom_fit.svg"), tr("Fit"), this, [this]() { if (currentView()) currentView()->zoomFit(); });
+    QAction* tbZoomFit = m_mainToolBar->addAction(IconManager::getIcon("zoom_fit"), tr("Fit"), this, [this]() { if (currentView()) currentView()->zoomFit(); });
     registerAct(tbZoomFit, "zoom_fit");
 
     // 2. Property Toolbar (below main toolbar)
@@ -330,7 +330,7 @@ void MainWindow::setupToolbars() {
     connect(m_toolActionGroup, &QActionGroup::triggered, this, &MainWindow::onToolTriggered);
 
     auto addToolAct = [this, registerAct](const QString& iconName, const QString& title, ToolType t, bool check = false) -> QAction* {
-        QAction* act = new QAction(QIcon(QString(":/icons/%1.svg").arg(iconName)), title, this);
+        QAction* act = new QAction(IconManager::getIcon(iconName), title, this);
         act->setCheckable(true);
         act->setChecked(check);
         act->setData(static_cast<int>(t));
@@ -538,17 +538,17 @@ bool MainWindow::maybeSaveTab(int index) {
         this,
         tr("Save Changes"),
         tr("Do you want to save changes to \"%1\" before closing?").arg(tabTitle),
-        QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
-        QMessageBox::Save
+        QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel,
+        QMessageBox::Yes
     );
 
-    if (res == QMessageBox::Save) {
+    if (res == QMessageBox::Yes) {
         return saveTab(index);
-    } else if (res == QMessageBox::Cancel) {
-        return false;
+    } else if (res == QMessageBox::No) {
+        return true;
     }
-    // Discard
-    return true;
+    // Cancel or closed dialog
+    return false;
 }
 
 void MainWindow::onTabCloseRequested(int index) {

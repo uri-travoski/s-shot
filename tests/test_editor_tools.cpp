@@ -4,9 +4,13 @@
 #include <QStyleOptionGraphicsItem>
 #include <QGraphicsSceneMouseEvent>
 #include <QWheelEvent>
+#include <QMessageBox>
+#include <QAbstractButton>
 #include "editor/CanvasScene.h"
 #include "editor/CanvasView.h"
 #include "core/SettingsManager.h"
+#include "core/UpdateManager.h"
+#include "core/IconManager.h"
 #include "capture/RegionSnippingOverlay.h"
 #include "editor/items/PenItem.h"
 #include "editor/items/BlurItem.h"
@@ -45,6 +49,10 @@ private slots:
     void testBlurItemMemoryOptimization();
     void testScreenCapture();
     void testRegionSnippingCapture();
+    void testTabCloseSaveDialogButtons();
+    void testAutoCheckUpdatesSetting();
+    void testUpdateManagerVersionComparison();
+    void testIconManager();
 };
 
 void TestEditorTools::initTestCase() {
@@ -601,6 +609,96 @@ void TestEditorTools::testRegionSnippingCapture() {
     QVERIFY(!resultPix.isNull());
     QVERIFY(resultPix.width() >= 100);
     QVERIFY(resultPix.height() >= 100);
+}
+
+void TestEditorTools::testTabCloseSaveDialogButtons() {
+    QMessageBox box(
+        QMessageBox::Question,
+        "Save Changes",
+        "Do you want to save changes to \"Capture 1\" before closing?",
+        QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel
+    );
+    box.setDefaultButton(QMessageBox::Yes);
+    box.show();
+    QApplication::processEvents();
+
+    QPixmap grab = box.grab();
+    grab.save("/home/owner/distrobox-homes/devbox/.gemini/antigravity/brain/e77fcd3f-2a52-4f22-843d-d82ecd75f998/save_dialog_preview.png");
+
+    QList<QAbstractButton*> buttons = box.buttons();
+    QCOMPARE(buttons.size(), 3);
+    QVERIFY(box.button(QMessageBox::Yes) != nullptr);
+    QVERIFY(box.button(QMessageBox::No) != nullptr);
+    QVERIFY(box.button(QMessageBox::Cancel) != nullptr);
+    QCOMPARE(box.standardButton(box.button(QMessageBox::Yes)), QMessageBox::Yes);
+    QCOMPARE(box.standardButton(box.button(QMessageBox::No)), QMessageBox::No);
+    QCOMPARE(box.standardButton(box.button(QMessageBox::Cancel)), QMessageBox::Cancel);
+    box.close();
+}
+
+void TestEditorTools::testAutoCheckUpdatesSetting() {
+    SettingsManager& s = SettingsManager::instance();
+    bool original = s.autoCheckUpdates();
+
+    s.setAutoCheckUpdates(false);
+    QCOMPARE(s.autoCheckUpdates(), false);
+
+    s.setAutoCheckUpdates(true);
+    QCOMPARE(s.autoCheckUpdates(), true);
+
+    s.save();
+    s.load();
+    QCOMPARE(s.autoCheckUpdates(), true);
+
+    s.setAutoCheckUpdates(original);
+    s.save();
+}
+
+void TestEditorTools::testUpdateManagerVersionComparison() {
+    // Newer remote versions
+    QVERIFY(UpdateManager::isVersionNewer("v1.23", "1.22"));
+    QVERIFY(UpdateManager::isVersionNewer("1.22.1", "1.22"));
+    QVERIFY(UpdateManager::isVersionNewer("v1.23.0", "1.22.0"));
+    QVERIFY(UpdateManager::isVersionNewer("v2.0", "1.22"));
+    QVERIFY(UpdateManager::isVersionNewer("v2.0.0", "1.22.0"));
+
+    // Equal versions
+    QVERIFY(!UpdateManager::isVersionNewer("v1.22", "1.22"));
+    QVERIFY(!UpdateManager::isVersionNewer("1.22", "1.22"));
+    QVERIFY(!UpdateManager::isVersionNewer("v1.22.0", "1.22.0"));
+    QVERIFY(!UpdateManager::isVersionNewer("1.22.0", "1.22"));
+
+    // Older remote versions
+    QVERIFY(!UpdateManager::isVersionNewer("v1.21", "1.22"));
+    QVERIFY(!UpdateManager::isVersionNewer("v1.21.9", "1.22"));
+    QVERIFY(!UpdateManager::isVersionNewer("v0.9.0", "1.22.0"));
+}
+
+void TestEditorTools::testIconManager() {
+    // Test toolbar and tool icons (dark and light)
+    QIcon selectIcon = IconManager::getIcon("select");
+    QVERIFY(!selectIcon.isNull());
+    QVERIFY(!selectIcon.pixmap(24, 24).isNull());
+
+    QIcon cropIcon = IconManager::getIcon("crop");
+    QVERIFY(!cropIcon.isNull());
+    QVERIFY(!cropIcon.pixmap(24, 24).isNull());
+
+    QIcon textIconLight = IconManager::getIcon("text", true);
+    QVERIFY(!textIconLight.isNull());
+    QVERIFY(!textIconLight.pixmap(24, 24).isNull());
+
+    // Test app icon and multi-resolution pixmaps
+    QIcon appIcon = IconManager::getAppIcon();
+    QVERIFY(!appIcon.isNull());
+    QVERIFY(!appIcon.pixmap(16, 16).isNull());
+    QVERIFY(!appIcon.pixmap(22, 22).isNull());
+    QVERIFY(!appIcon.pixmap(24, 24).isNull());
+    QVERIFY(!appIcon.pixmap(32, 32).isNull());
+    QVERIFY(!appIcon.pixmap(48, 48).isNull());
+    QVERIFY(!appIcon.pixmap(64, 64).isNull());
+    QVERIFY(!appIcon.pixmap(128, 128).isNull());
+    QVERIFY(!appIcon.pixmap(256, 256).isNull());
 }
 
 int main(int argc, char** argv) {

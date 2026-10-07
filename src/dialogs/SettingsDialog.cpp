@@ -1,6 +1,8 @@
 #include "SettingsDialog.h"
 #include "../core/SettingsManager.h"
 #include "../core/HotkeyManager.h"
+#include "../core/UpdateManager.h"
+#include <QCoreApplication>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFormLayout>
@@ -22,7 +24,7 @@ SettingsDialog::SettingsDialog(QWidget* parent)
     QVBoxLayout* genLayout = new QVBoxLayout(generalTab);
 
     // Appearance Group
-    QGroupBox* appGroup = new QGroupBox(tr("Appearance & Theme"), generalTab);
+    QGroupBox* appGroup = new QGroupBox(tr("Appearance && Theme"), generalTab);
     QFormLayout* appForm = new QFormLayout(appGroup);
     m_themeCombo = new QComboBox(appGroup);
     m_themeCombo->addItem(tr("Dark"), "Dark");
@@ -31,7 +33,7 @@ SettingsDialog::SettingsDialog(QWidget* parent)
     genLayout->addWidget(appGroup);
 
     // Startup & Tray Group
-    QGroupBox* startupGroup = new QGroupBox(tr("Startup & Tray"), generalTab);
+    QGroupBox* startupGroup = new QGroupBox(tr("Startup && Tray"), generalTab);
     QVBoxLayout* startupLayout = new QVBoxLayout(startupGroup);
     m_startWithPCCheck = new QCheckBox(tr("Start with PC (Launch automatically in system tray)"), startupGroup);
     m_runInTrayCheck = new QCheckBox(tr("Close editor to system tray instead of exiting"), startupGroup);
@@ -40,7 +42,7 @@ SettingsDialog::SettingsDialog(QWidget* parent)
     genLayout->addWidget(startupGroup);
 
     // Save & Storage Group
-    QGroupBox* saveGroup = new QGroupBox(tr("Save & Storage"), generalTab);
+    QGroupBox* saveGroup = new QGroupBox(tr("Save && Storage"), generalTab);
     QFormLayout* saveForm = new QFormLayout(saveGroup);
     QHBoxLayout* pathLayout = new QHBoxLayout();
     m_saveLocationEdit = new QLineEdit(saveGroup);
@@ -61,6 +63,54 @@ SettingsDialog::SettingsDialog(QWidget* parent)
     saveForm->addRow("", m_openEditorCheck);
 
     genLayout->addWidget(saveGroup);
+
+    // Software Updates Group
+    QGroupBox* updateGroup = new QGroupBox(tr("Software Updates"), generalTab);
+    QVBoxLayout* updateLayout = new QVBoxLayout(updateGroup);
+
+    m_autoCheckUpdatesCheck = new QCheckBox(tr("Automatically check for updates on startup"), updateGroup);
+    updateLayout->addWidget(m_autoCheckUpdatesCheck);
+
+    QHBoxLayout* updateBtnsLayout = new QHBoxLayout();
+    m_checkForUpdatesBtn = new QPushButton(tr("Check for Updates"), updateGroup);
+    m_autoUpdateCheckBtn = new QPushButton(tr("Auto-Update Check"), updateGroup);
+    updateBtnsLayout->addWidget(m_checkForUpdatesBtn);
+    updateBtnsLayout->addWidget(m_autoUpdateCheckBtn);
+    updateLayout->addLayout(updateBtnsLayout);
+
+    m_updateStatusLabel = new QLabel(tr("Current version: %1").arg(QCoreApplication::applicationVersion()), updateGroup);
+    m_updateStatusLabel->setStyleSheet("color: #888888; font-size: 11px;");
+    updateLayout->addWidget(m_updateStatusLabel);
+
+    connect(m_checkForUpdatesBtn, &QPushButton::clicked, this, &SettingsDialog::onCheckForUpdatesClicked);
+    connect(m_autoUpdateCheckBtn, &QPushButton::clicked, this, &SettingsDialog::onAutoUpdateCheckClicked);
+
+    connect(&UpdateManager::instance(), &UpdateManager::checkStarted, this, [this]() {
+        m_updateStatusLabel->setText(tr("Checking for updates on GitHub..."));
+        m_checkForUpdatesBtn->setEnabled(false);
+        m_autoUpdateCheckBtn->setEnabled(false);
+    });
+
+    connect(&UpdateManager::instance(), &UpdateManager::checkFinished, this, [this](bool updateAvailable, const QString& latestVer, const QString&) {
+        m_checkForUpdatesBtn->setEnabled(true);
+        m_autoUpdateCheckBtn->setEnabled(true);
+        if (updateAvailable) {
+            m_updateStatusLabel->setText(tr("New version %1 available! (Current: %2)").arg(latestVer, QCoreApplication::applicationVersion()));
+            m_updateStatusLabel->setStyleSheet("color: #30e500; font-size: 11px; font-weight: bold;");
+        } else {
+            m_updateStatusLabel->setText(tr("S-Shot is up to date (v%1).").arg(QCoreApplication::applicationVersion()));
+            m_updateStatusLabel->setStyleSheet("color: #888888; font-size: 11px;");
+        }
+    });
+
+    connect(&UpdateManager::instance(), &UpdateManager::checkError, this, [this](const QString& err) {
+        m_checkForUpdatesBtn->setEnabled(true);
+        m_autoUpdateCheckBtn->setEnabled(true);
+        m_updateStatusLabel->setText(tr("Check failed: %1").arg(err));
+        m_updateStatusLabel->setStyleSheet("color: #ff5555; font-size: 11px;");
+    });
+
+    genLayout->addWidget(updateGroup);
     genLayout->addStretch();
     tabs->addTab(generalTab, tr("General"));
 
@@ -147,6 +197,7 @@ void SettingsDialog::loadSettings() {
     m_formatCombo->setCurrentText(s.defaultFormat());
     m_autoCopyCheck->setChecked(s.autoCopyToClipboard());
     m_openEditorCheck->setChecked(s.openEditorAfterCapture());
+    m_autoCheckUpdatesCheck->setChecked(s.autoCheckUpdates());
 
     m_hotkeyFullscreenEdit->setText(s.hotkeyFullscreen());
     m_hotkeyRegionEdit->setText(s.hotkeyRegion());
@@ -174,6 +225,7 @@ void SettingsDialog::saveSettings() {
     s.setDefaultFormat(m_formatCombo->currentText());
     s.setAutoCopyToClipboard(m_autoCopyCheck->isChecked());
     s.setOpenEditorAfterCapture(m_openEditorCheck->isChecked());
+    s.setAutoCheckUpdates(m_autoCheckUpdatesCheck->isChecked());
 
     s.setHotkeyFullscreen(m_hotkeyFullscreenEdit->text());
     s.setHotkeyRegion(m_hotkeyRegionEdit->text());
@@ -188,4 +240,12 @@ void SettingsDialog::saveSettings() {
     HotkeyManager::instance().updateHotkeys();
 
     accept();
+}
+
+void SettingsDialog::onCheckForUpdatesClicked() {
+    UpdateManager::instance().checkForUpdates(false, this);
+}
+
+void SettingsDialog::onAutoUpdateCheckClicked() {
+    UpdateManager::instance().checkForUpdates(false, this);
 }
