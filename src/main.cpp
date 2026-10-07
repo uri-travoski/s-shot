@@ -17,7 +17,7 @@ int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
     app.setApplicationName("s-shot");
     app.setApplicationDisplayName("S-Shot");
-    app.setApplicationVersion("0.9");
+    app.setApplicationVersion("1.21");
     app.setOrganizationName("S-Shot");
     app.setWindowIcon(QIcon(":/icons/s-shot.svg"));
 
