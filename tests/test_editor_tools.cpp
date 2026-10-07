@@ -656,22 +656,22 @@ void TestEditorTools::testAutoCheckUpdatesSetting() {
 
 void TestEditorTools::testUpdateManagerVersionComparison() {
     // Newer remote versions
-    QVERIFY(UpdateManager::isVersionNewer("v1.23", "1.22"));
-    QVERIFY(UpdateManager::isVersionNewer("1.22.1", "1.22"));
-    QVERIFY(UpdateManager::isVersionNewer("v1.23.0", "1.22.0"));
-    QVERIFY(UpdateManager::isVersionNewer("v2.0", "1.22"));
-    QVERIFY(UpdateManager::isVersionNewer("v2.0.0", "1.22.0"));
+    QVERIFY(UpdateManager::isVersionNewer("v1.24", "1.23"));
+    QVERIFY(UpdateManager::isVersionNewer("1.23.1", "1.23"));
+    QVERIFY(UpdateManager::isVersionNewer("v1.24.0", "1.23.0"));
+    QVERIFY(UpdateManager::isVersionNewer("v2.0", "1.23"));
+    QVERIFY(UpdateManager::isVersionNewer("v2.0.0", "1.23.0"));
 
     // Equal versions
-    QVERIFY(!UpdateManager::isVersionNewer("v1.22", "1.22"));
-    QVERIFY(!UpdateManager::isVersionNewer("1.22", "1.22"));
-    QVERIFY(!UpdateManager::isVersionNewer("v1.22.0", "1.22.0"));
-    QVERIFY(!UpdateManager::isVersionNewer("1.22.0", "1.22"));
+    QVERIFY(!UpdateManager::isVersionNewer("v1.23", "1.23"));
+    QVERIFY(!UpdateManager::isVersionNewer("1.23", "1.23"));
+    QVERIFY(!UpdateManager::isVersionNewer("v1.23.0", "1.23.0"));
+    QVERIFY(!UpdateManager::isVersionNewer("1.23.0", "1.23"));
 
     // Older remote versions
-    QVERIFY(!UpdateManager::isVersionNewer("v1.21", "1.22"));
-    QVERIFY(!UpdateManager::isVersionNewer("v1.21.9", "1.22"));
-    QVERIFY(!UpdateManager::isVersionNewer("v0.9.0", "1.22.0"));
+    QVERIFY(!UpdateManager::isVersionNewer("v1.22", "1.23"));
+    QVERIFY(!UpdateManager::isVersionNewer("v1.22.9", "1.23"));
+    QVERIFY(!UpdateManager::isVersionNewer("v0.9.0", "1.23.0"));
 }
 
 void TestEditorTools::testIconManager() {
