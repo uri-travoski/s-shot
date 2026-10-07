@@ -57,6 +57,7 @@ private slots:
     void onCursorMoved(const QPoint& pt);
     void onUndo();
     void onRedo();
+    void onSceneSelectionChanged();
 
 private:
     void setupMenus();
@@ -94,6 +95,7 @@ private:
     QAction* m_actText = nullptr;
     QAction* m_actBadge = nullptr;
     QAction* m_actBlur = nullptr;
+    QAction* m_actBucket = nullptr;
     QAction* m_actCrop = nullptr;
 
     // Property widgets
@@ -129,6 +131,6 @@ private:
     QColor m_currentFillColor = Qt::transparent;
     QFont m_currentFont = QFont("Sans", 14, QFont::Bold);
     int m_currentStrokeWidth = 3;
-    int m_currentBlurLevel = 5;
+    int m_currentBlurLevel = 4;
     bool m_firstCloseNotification = true;
 };

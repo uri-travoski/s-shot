@@ -32,13 +32,19 @@ void ColorPickerOverlay::paintEvent(QPaintEvent*) {
     p.setRenderHint(QPainter::Antialiasing, true);
 
     // Render underlying screen
-    p.drawPixmap(0, 0, m_screenGrab);
+    p.drawPixmap(rect(), m_screenGrab);
 
     const int K = 9;
     const int srcSpan = 2 * K + 1; // 19 pixels (exact center pixel at index 9)
     const int zoomFactor = 8;
     const int diameter = srcSpan * zoomFactor; // 152 pixels
     const int radius = diameter / 2; // 76 pixels
+
+    const qreal scaleX = (width() > 0 && m_screenGrab.width() > 0) ? (static_cast<qreal>(m_screenGrab.width()) / static_cast<qreal>(width())) : 1.0;
+    const qreal scaleY = (height() > 0 && m_screenGrab.height() > 0) ? (static_cast<qreal>(m_screenGrab.height()) / static_cast<qreal>(height())) : 1.0;
+
+    int physCenterX = qBound(0, static_cast<int>(std::round(m_currentPos.x() * scaleX)), m_screenGrab.width() - 1);
+    int physCenterY = qBound(0, static_cast<int>(std::round(m_currentPos.y() * scaleY)), m_screenGrab.height() - 1);
 
     // Position loupe offset from the cross (cursor pos) - a few cm away next to it
     int offset = 32;
@@ -62,8 +68,8 @@ void ColorPickerOverlay::paintEvent(QPaintEvent*) {
 
     QRect loupeRect(loupeX, loupeY, diameter, diameter);
 
-    // Extract 19x19 source pixel region safely with boundary clipping centered at the cross
-    QRect srcRect(m_currentPos.x() - K, m_currentPos.y() - K, srcSpan, srcSpan);
+    // Extract 19x19 source pixel region centered directly at the physical pixel under the cross
+    QRect srcRect(physCenterX - K, physCenterY - K, srcSpan, srcSpan);
     QRect validScreenRect = srcRect.intersected(m_screenGrab.rect());
 
     QImage srcImg(srcSpan, srcSpan, QImage::Format_ARGB32_Premultiplied);
@@ -112,9 +118,7 @@ void ColorPickerOverlay::paintEvent(QPaintEvent*) {
     p.drawEllipse(loupeRect);
 
     // 5. Read pixel color at the cross
-    int px = qBound(0, m_currentPos.x(), m_screenGrab.width() - 1);
-    int py = qBound(0, m_currentPos.y(), m_screenGrab.height() - 1);
-    QColor color = m_screenGrab.toImage().pixelColor(px, py);
+    QColor color = m_screenGrab.toImage().pixelColor(physCenterX, physCenterY);
     QString hex = color.name(QColor::HexRgb).toUpper();
     QString rgbStr = QString("RGB(%1, %2, %3)").arg(color.red()).arg(color.green()).arg(color.blue());
 
@@ -158,9 +162,13 @@ void ColorPickerOverlay::paintEvent(QPaintEvent*) {
 void ColorPickerOverlay::mousePressEvent(QMouseEvent* event) {
     setCursor(Qt::ArrowCursor);
     if (event->button() == Qt::LeftButton) {
-        int px = qBound(0, m_currentPos.x(), m_screenGrab.width() - 1);
-        int py = qBound(0, m_currentPos.y(), m_screenGrab.height() - 1);
-        QColor color = m_screenGrab.toImage().pixelColor(px, py);
+        const qreal scaleX = (width() > 0 && m_screenGrab.width() > 0) ? (static_cast<qreal>(m_screenGrab.width()) / static_cast<qreal>(width())) : 1.0;
+        const qreal scaleY = (height() > 0 && m_screenGrab.height() > 0) ? (static_cast<qreal>(m_screenGrab.height()) / static_cast<qreal>(height())) : 1.0;
+
+        int physCenterX = qBound(0, static_cast<int>(std::round(m_currentPos.x() * scaleX)), m_screenGrab.width() - 1);
+        int physCenterY = qBound(0, static_cast<int>(std::round(m_currentPos.y() * scaleY)), m_screenGrab.height() - 1);
+
+        QColor color = m_screenGrab.toImage().pixelColor(physCenterX, physCenterY);
         QString hex = color.name(QColor::HexRgb).toUpper();
 
         QClipboard* cb = QGuiApplication::clipboard();

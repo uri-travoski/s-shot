@@ -12,6 +12,7 @@
     <file>icons/text.svg</file>
     <file>icons/badge.svg</file>
     <file>icons/blur.svg</file>
+    <file>icons/bucket.svg</file>
     <file>icons/crop.svg</file>
     <file>icons/undo.svg</file>
     <file>icons/redo.svg</file>
@@ -45,6 +46,7 @@
     <file>icons/light/text.svg</file>
     <file>icons/light/badge.svg</file>
     <file>icons/light/blur.svg</file>
+    <file>icons/light/bucket.svg</file>
     <file>icons/light/crop.svg</file>
     <file>icons/light/undo.svg</file>
     <file>icons/light/redo.svg</file>

@@ -247,12 +247,127 @@ void CanvasScene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
             return;
         }
 
-        // Otherwise, start area selection rectangle
+        // Otherwise, clear selection and start area selection rectangle
+        clearSelection();
         m_isSelectingArea = true;
         m_selectedArea = QRectF(m_startPoint, m_startPoint);
         m_areaSelectionRectItem->setRect(m_selectedArea);
         m_areaSelectionRectItem->setVisible(true);
         emit areaSelectionChanged(m_selectedArea, true);
+        return;
+    }
+
+    if (m_currentTool == ToolType::BucketFill) {
+        QColor fillCol = (m_fillColor.isValid() && m_fillColor != Qt::transparent && m_fillColor.alpha() > 0)
+                             ? m_fillColor
+                             : m_strokeColor;
+
+        // 1. If clicked an existing vector shape or text item, fill it
+        QGraphicsItem* clicked = itemAt(m_startPoint, QTransform());
+        if (clicked && clicked != m_basePixmapItem && clicked != m_areaSelectionRectItem) {
+            if (auto* shape = dynamic_cast<ShapeItem*>(clicked)) {
+                shape->setFillColor(fillCol);
+                emit sceneModified();
+                return;
+            }
+            if (auto* text = dynamic_cast<TextItem*>(clicked)) {
+                text->setFillColor(fillCol);
+                emit sceneModified();
+                return;
+            }
+        }
+
+        // 2. Otherwise flood fill the base pixmap at pos
+        if (!m_basePixmapItem || m_basePixmapItem->pixmap().isNull()) {
+            return;
+        }
+
+        QPoint pt = m_startPoint.toPoint();
+        QPixmap oldPix = m_basePixmapItem->pixmap();
+        if (!oldPix.rect().contains(pt)) {
+            return;
+        }
+
+        QImage img = oldPix.toImage().convertToFormat(QImage::Format_ARGB32);
+        int w = img.width();
+        int h = img.height();
+
+        uint32_t targetVal = reinterpret_cast<const uint32_t*>(img.constScanLine(pt.y()))[pt.x()];
+        uint32_t fillVal = fillCol.rgba();
+
+        if (targetVal == fillVal) {
+            return;
+        }
+
+        std::vector<uint8_t> visited(w * h, 0);
+        std::vector<int> queue;
+        queue.reserve(4096);
+
+        int startIdx = pt.y() * w + pt.x();
+        visited[startIdx] = 1;
+        reinterpret_cast<uint32_t*>(img.scanLine(pt.y()))[pt.x()] = fillVal;
+        queue.push_back(startIdx);
+
+        size_t head = 0;
+        while (head < queue.size()) {
+            int idx = queue[head++];
+            int cx = idx % w;
+            int cy = idx / w;
+
+            // Left
+            if (cx > 0) {
+                int nIdx = idx - 1;
+                if (!visited[nIdx]) {
+                    uint32_t* row = reinterpret_cast<uint32_t*>(img.scanLine(cy));
+                    if (row[cx - 1] == targetVal) {
+                        visited[nIdx] = 1;
+                        row[cx - 1] = fillVal;
+                        queue.push_back(nIdx);
+                    }
+                }
+            }
+            // Right
+            if (cx + 1 < w) {
+                int nIdx = idx + 1;
+                if (!visited[nIdx]) {
+                    uint32_t* row = reinterpret_cast<uint32_t*>(img.scanLine(cy));
+                    if (row[cx + 1] == targetVal) {
+                        visited[nIdx] = 1;
+                        row[cx + 1] = fillVal;
+                        queue.push_back(nIdx);
+                    }
+                }
+            }
+            // Up
+            if (cy > 0) {
+                int nIdx = idx - w;
+                if (!visited[nIdx]) {
+                    uint32_t* row = reinterpret_cast<uint32_t*>(img.scanLine(cy - 1));
+                    if (row[cx] == targetVal) {
+                        visited[nIdx] = 1;
+                        row[cx] = fillVal;
+                        queue.push_back(nIdx);
+                    }
+                }
+            }
+            // Down
+            if (cy + 1 < h) {
+                int nIdx = idx + w;
+                if (!visited[nIdx]) {
+                    uint32_t* row = reinterpret_cast<uint32_t*>(img.scanLine(cy + 1));
+                    if (row[cx] == targetVal) {
+                        visited[nIdx] = 1;
+                        row[cx] = fillVal;
+                        queue.push_back(nIdx);
+                    }
+                }
+            }
+        }
+
+        QPixmap newPix = QPixmap::fromImage(img);
+        m_undoStack.push(new ModifyPixmapCommand(this, oldPix, newPix, "Flood Fill"));
+        emit sceneModified();
+        emit toolActionCompleted();
         return;
     }
 
@@ -268,7 +383,9 @@ void CanvasScene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
     if (m_currentTool == ToolType::Text) {
         QGraphicsItem* clicked = itemAt(m_startPoint, QTransform());
         if (clicked && clicked != m_basePixmapItem && clicked != m_areaSelectionRectItem) {
-            if (dynamic_cast<TextItem*>(clicked)) {
+            if (auto* txt = dynamic_cast<TextItem*>(clicked)) {
+                clearSelection();
+                txt->setSelected(true);
                 QGraphicsScene::mousePressEvent(event);
                 return;
             }

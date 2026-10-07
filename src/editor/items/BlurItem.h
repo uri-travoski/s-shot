@@ -9,7 +9,7 @@ public:
     enum { Type = UserType + 7 };
     int type() const override { return Type; }
 
-    BlurItem(const QRectF& rect = QRectF(), const QPixmap& sourcePixmap = QPixmap(), int blurLevel = 5);
+    BlurItem(const QRectF& rect = QRectF(), const QPixmap& sourcePixmap = QPixmap(), int blurLevel = 4);
 
     void setRect(const QRectF& r);
     QRectF rect() const { return m_rect; }
@@ -32,5 +32,5 @@ private:
     QRectF m_rect;
     QPixmap m_blurredPixmap;
     QPixmap m_sourceCache;
-    int m_blurLevel = 5;
+    int m_blurLevel = 4;
 };

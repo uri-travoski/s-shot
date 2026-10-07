@@ -41,14 +41,23 @@ void RegionSnippingOverlay::paintEvent(QPaintEvent*) {
     p.setRenderHint(QPainter::Antialiasing, true);
 
     // Draw original grabbed screen
-    p.drawPixmap(0, 0, m_screenGrab);
+    p.drawPixmap(rect(), m_screenGrab);
 
     // Dim the entire screen
     p.fillRect(rect(), QColor(0, 0, 0, 110));
 
+    const qreal scaleX = (width() > 0 && m_screenGrab.width() > 0) ? (static_cast<qreal>(m_screenGrab.width()) / static_cast<qreal>(width())) : 1.0;
+    const qreal scaleY = (height() > 0 && m_screenGrab.height() > 0) ? (static_cast<qreal>(m_screenGrab.height()) / static_cast<qreal>(height())) : 1.0;
+
     // If there is an active selection, redraw that region clearly
     if (!m_selectedRect.isNull() && m_selectedRect.isValid()) {
-        p.drawPixmap(m_selectedRect, m_screenGrab, m_selectedRect);
+        QRect selPhys(
+            qBound(0, static_cast<int>(std::round(m_selectedRect.x() * scaleX)), m_screenGrab.width()),
+            qBound(0, static_cast<int>(std::round(m_selectedRect.y() * scaleY)), m_screenGrab.height()),
+            qBound(0, static_cast<int>(std::round(m_selectedRect.width() * scaleX)), m_screenGrab.width()),
+            qBound(0, static_cast<int>(std::round(m_selectedRect.height() * scaleY)), m_screenGrab.height())
+        );
+        p.drawPixmap(m_selectedRect, m_screenGrab, selPhys);
 
         // Selection border
         QPen borderPen(QColor(48, 229, 0), 2, Qt::SolidLine);
@@ -93,6 +102,12 @@ void RegionSnippingOverlay::drawMagnifier(QPainter& p, const QPoint& pos) {
     const int diameter = srcSpan * zoomFactor; // 152 pixels
     const int radius = diameter / 2; // 76 pixels
 
+    const qreal scaleX = (width() > 0 && m_screenGrab.width() > 0) ? (static_cast<qreal>(m_screenGrab.width()) / static_cast<qreal>(width())) : 1.0;
+    const qreal scaleY = (height() > 0 && m_screenGrab.height() > 0) ? (static_cast<qreal>(m_screenGrab.height()) / static_cast<qreal>(height())) : 1.0;
+
+    int physCenterX = qBound(0, static_cast<int>(std::round(pos.x() * scaleX)), m_screenGrab.width() - 1);
+    int physCenterY = qBound(0, static_cast<int>(std::round(pos.y() * scaleY)), m_screenGrab.height() - 1);
+
     // Position loupe offset from the cross (cursor pos) so the cross is outside the circle
     int offset = 28;
     int loupeX = pos.x() + offset;
@@ -112,8 +127,8 @@ void RegionSnippingOverlay::drawMagnifier(QPainter& p, const QPoint& pos) {
 
     QRect loupeRect(loupeX, loupeY, diameter, diameter);
 
-    // Extract 19x19 source pixel region safely with boundary clipping centered at the cross
-    QRect srcRect(pos.x() - K, pos.y() - K, srcSpan, srcSpan);
+    // Extract 19x19 source pixel region centered exactly on the physical pixel under the cross
+    QRect srcRect(physCenterX - K, physCenterY - K, srcSpan, srcSpan);
     QRect validScreenRect = srcRect.intersected(m_screenGrab.rect());
 
     QImage srcImg(srcSpan, srcSpan, QImage::Format_ARGB32_Premultiplied);
@@ -162,9 +177,7 @@ void RegionSnippingOverlay::drawMagnifier(QPainter& p, const QPoint& pos) {
     p.drawEllipse(loupeRect);
 
     // 5. Smart Readout Badge (Color, Coordinates & Dimensions)
-    int px = qBound(0, pos.x(), m_screenGrab.width() - 1);
-    int py = qBound(0, pos.y(), m_screenGrab.height() - 1);
-    QColor curColor = m_screenGrab.toImage().pixelColor(px, py);
+    QColor curColor = m_screenGrab.toImage().pixelColor(physCenterX, physCenterY);
     QString hexText = curColor.name(QColor::HexRgb).toUpper();
 
     QString infoText;
@@ -242,7 +255,15 @@ void RegionSnippingOverlay::mouseReleaseEvent(QMouseEvent* event) {
             m_selectionDone = true;
             setCursor(Qt::ArrowCursor);
             hide();
-            QPixmap cropped = m_screenGrab.copy(m_selectedRect);
+            const qreal scaleX = (width() > 0 && m_screenGrab.width() > 0) ? (static_cast<qreal>(m_screenGrab.width()) / static_cast<qreal>(width())) : 1.0;
+            const qreal scaleY = (height() > 0 && m_screenGrab.height() > 0) ? (static_cast<qreal>(m_screenGrab.height()) / static_cast<qreal>(height())) : 1.0;
+            QRect cropPhys(
+                qBound(0, static_cast<int>(std::round(m_selectedRect.x() * scaleX)), m_screenGrab.width() - 1),
+                qBound(0, static_cast<int>(std::round(m_selectedRect.y() * scaleY)), m_screenGrab.height() - 1),
+                qBound(1, static_cast<int>(std::round(m_selectedRect.width() * scaleX)), m_screenGrab.width()),
+                qBound(1, static_cast<int>(std::round(m_selectedRect.height() * scaleY)), m_screenGrab.height())
+            );
+            QPixmap cropped = m_screenGrab.copy(cropPhys.intersected(m_screenGrab.rect()));
             emit regionCaptured(cropped);
         } else {
             m_selectedRect = QRect();

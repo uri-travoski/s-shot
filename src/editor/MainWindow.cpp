@@ -298,7 +298,7 @@ void MainWindow::setupToolbars() {
 
     m_blurRadiusSpin = new QSpinBox(this);
     m_blurRadiusSpin->setRange(1, 10);
-    m_blurRadiusSpin->setValue(5);
+    m_blurRadiusSpin->setValue(4);
     m_blurRadiusSpin->setFixedWidth(55);
     m_blurRadiusSpin->setToolTip(tr("Blur intensity from 1 (light) to 10 (heavy redaction)"));
     connect(m_blurRadiusSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, &MainWindow::onBlurLevelChanged);
@@ -344,6 +344,7 @@ void MainWindow::setupToolbars() {
     m_actText = addToolAct("text", tr("Text"), ToolType::Text);
     m_actBadge = addToolAct("badge", tr("Number / Stepper Badge (1, 2, 3...)"), ToolType::Badge);
     m_actBlur = addToolAct("blur", tr("Blur / Pixelate Redaction"), ToolType::Blur);
+    m_actBucket = addToolAct("bucket", tr("Fill Colour Bucket Tool"), ToolType::BucketFill);
     m_actCrop = addToolAct("crop", tr("Crop Tool"), ToolType::Crop);
 
     updateToolPropertiesVisibility(ToolType::Select);
@@ -368,6 +369,7 @@ void MainWindow::addImageTab(const QPixmap& pixmap, const QString& title) {
     scene->setStrokeWidth(m_currentStrokeWidth);
     scene->setBlurLevel(m_currentBlurLevel);
     scene->setCurrentFont(m_currentFont);
+    connect(scene, &QGraphicsScene::selectionChanged, this, &MainWindow::onSceneSelectionChanged);
 
     QAction* activeAct = m_toolActionGroup->checkedAction();
     if (activeAct) {
@@ -483,6 +485,7 @@ void MainWindow::onCurrentTabChanged(int) {
         QPixmap p = v->canvasScene()->basePixmap();
         m_statusDimensions->setText(QString("%1 × %2 px").arg(p.width()).arg(p.height()));
         onZoomChanged(v->zoomFactor());
+        onSceneSelectionChanged();
     }
 }
 
@@ -511,6 +514,15 @@ void MainWindow::onRedo() {
 void MainWindow::onToolTriggered(QAction* action) {
     if (!action) return;
     ToolType tool = static_cast<ToolType>(action->data().toInt());
+
+    if (tool == ToolType::BucketFill) {
+        if (m_currentFillColor == Qt::transparent || !m_currentFillColor.isValid()) {
+            m_currentFillColor = m_currentStrokeColor;
+            m_fillColorBtn->setText("");
+            m_fillColorBtn->setStyleSheet(QString("background-color: %1; border: 1px solid #888; border-radius: 3px;").arg(m_currentFillColor.name()));
+            updateToolProperties();
+        }
+    }
 
     updateToolPropertiesVisibility(tool);
 
@@ -549,8 +561,11 @@ void MainWindow::onSelectStrokeColor() {
                     arrow->setStrokeColor(c);
                 } else if (auto* shape = dynamic_cast<ShapeItem*>(item)) {
                     shape->setStrokeColor(c);
+                } else if (auto* badge = dynamic_cast<BadgeItem*>(item)) {
+                    badge->setStrokeColor(c);
                 }
             }
+            emit scene->sceneModified();
         }
     }
 }
@@ -575,6 +590,7 @@ void MainWindow::onSelectFillColor() {
                 shape->setFillColor(m_currentFillColor);
             }
         }
+        emit scene->sceneModified();
     }
 }
 
@@ -592,6 +608,7 @@ void MainWindow::onSelectFont() {
                         txt->setFont(f);
                     }
                 }
+                emit v->canvasScene()->sceneModified();
             }
         }
     }
@@ -600,6 +617,18 @@ void MainWindow::onSelectFont() {
 void MainWindow::onStrokeWidthChanged(int width) {
     m_currentStrokeWidth = width;
     updateToolProperties();
+    if (CanvasScene* scene = currentScene()) {
+        for (auto* item : scene->selectedItems()) {
+            if (auto* shape = dynamic_cast<ShapeItem*>(item)) {
+                shape->setStrokeWidth(width);
+            } else if (auto* pen = dynamic_cast<PenItem*>(item)) {
+                pen->setStrokeWidth(width);
+            } else if (auto* arrow = dynamic_cast<ArrowItem*>(item)) {
+                arrow->setStrokeWidth(width);
+            }
+        }
+        emit scene->sceneModified();
+    }
 }
 
 void MainWindow::onBlurLevelChanged(int level) {
@@ -614,6 +643,7 @@ void MainWindow::onBlurLevelChanged(int level) {
                     bi->updateEffect(v->canvasScene()->basePixmap());
                 }
             }
+            emit v->canvasScene()->sceneModified();
         }
     }
 }
@@ -623,6 +653,140 @@ void MainWindow::onResetBadgeCounter() {
     if (scene) {
         scene->resetBadgeCounter();
         statusBar()->showMessage(tr("Badge counter reset to 1"), 2000);
+    }
+}
+
+void MainWindow::onSceneSelectionChanged() {
+    CanvasScene* scene = currentScene();
+    if (!scene) return;
+
+    auto sel = scene->selectedItems();
+    if (sel.isEmpty()) {
+        // No items selected: restore properties toolbar to match active tool
+        QAction* activeAct = m_toolActionGroup->checkedAction();
+        ToolType tool = activeAct ? static_cast<ToolType>(activeAct->data().toInt()) : ToolType::Select;
+        updateToolPropertiesVisibility(tool);
+
+        // Restore toolbar widget values to application defaults
+        m_strokeColorBtn->setStyleSheet(QString("background-color: %1; border: 1px solid #888; border-radius: 3px;").arg(m_currentStrokeColor.name()));
+        if (m_currentFillColor.isValid() && m_currentFillColor != Qt::transparent && m_currentFillColor.alpha() > 0) {
+            m_fillColorBtn->setText("");
+            m_fillColorBtn->setStyleSheet(QString("background-color: %1; border: 1px solid #888; border-radius: 3px;").arg(m_currentFillColor.name()));
+        } else {
+            m_fillColorBtn->setText("Ø");
+            m_fillColorBtn->setStyleSheet("background-color: #888; color: #eee; border: 1px solid #666; border-radius: 3px; font-weight: bold;");
+        }
+        m_strokeWidthSpin->blockSignals(true);
+        m_strokeWidthSpin->setValue(m_currentStrokeWidth);
+        m_strokeWidthSpin->blockSignals(false);
+
+        m_blurRadiusSpin->blockSignals(true);
+        m_blurRadiusSpin->setValue(m_currentBlurLevel);
+        m_blurRadiusSpin->blockSignals(false);
+        return;
+    }
+
+    // Inspect the primary selected item
+    QGraphicsItem* item = sel.last();
+
+    if (auto* blur = dynamic_cast<BlurItem*>(item)) {
+        if (m_actStrokeLbl) m_actStrokeLbl->setVisible(false);
+        if (m_actStrokeColorBtn) m_actStrokeColorBtn->setVisible(false);
+        if (m_actFillLbl) m_actFillLbl->setVisible(false);
+        if (m_actFillColorBtn) m_actFillColorBtn->setVisible(false);
+        if (m_actFontBtn) m_actFontBtn->setVisible(false);
+        if (m_actWidthLbl) m_actWidthLbl->setVisible(false);
+        if (m_actStrokeWidthSpin) m_actStrokeWidthSpin->setVisible(false);
+        if (m_actBadgeSeparator) m_actBadgeSeparator->setVisible(false);
+        if (m_actResetBadgeBtn) m_actResetBadgeBtn->setVisible(false);
+        if (m_actBlurRadiusLbl) m_actBlurRadiusLbl->setVisible(true);
+        if (m_actBlurRadiusSpin) m_actBlurRadiusSpin->setVisible(true);
+
+        m_blurRadiusSpin->blockSignals(true);
+        m_blurRadiusSpin->setValue(blur->blurLevel());
+        m_blurRadiusSpin->blockSignals(false);
+    } else if (auto* txt = dynamic_cast<TextItem*>(item)) {
+        if (m_actStrokeLbl) m_actStrokeLbl->setVisible(true);
+        if (m_actStrokeColorBtn) m_actStrokeColorBtn->setVisible(true);
+        if (m_actFillLbl) m_actFillLbl->setVisible(true);
+        if (m_actFillColorBtn) m_actFillColorBtn->setVisible(true);
+        if (m_actFontBtn) m_actFontBtn->setVisible(true);
+        if (m_actWidthLbl) m_actWidthLbl->setVisible(false);
+        if (m_actStrokeWidthSpin) m_actStrokeWidthSpin->setVisible(false);
+        if (m_actBadgeSeparator) m_actBadgeSeparator->setVisible(false);
+        if (m_actResetBadgeBtn) m_actResetBadgeBtn->setVisible(false);
+        if (m_actBlurRadiusLbl) m_actBlurRadiusLbl->setVisible(false);
+        if (m_actBlurRadiusSpin) m_actBlurRadiusSpin->setVisible(false);
+
+        if (m_strokeLbl) m_strokeLbl->setText(tr(" Text: "));
+        if (m_strokeColorBtn) {
+            m_strokeColorBtn->setToolTip(tr("Text Color"));
+            m_strokeColorBtn->setStyleSheet(QString("background-color: %1; border: 1px solid #888; border-radius: 3px;").arg(txt->strokeColor().name()));
+        }
+        if (m_fillLbl) m_fillLbl->setText(tr("  Background: "));
+        if (m_fillColorBtn) {
+            m_fillColorBtn->setToolTip(tr("Textbox Background Color (Ø for Transparent)"));
+            if (txt->fillColor().isValid() && txt->fillColor() != Qt::transparent && txt->fillColor().alpha() > 0) {
+                m_fillColorBtn->setText("");
+                m_fillColorBtn->setStyleSheet(QString("background-color: %1; border: 1px solid #888; border-radius: 3px;").arg(txt->fillColor().name()));
+            } else {
+                m_fillColorBtn->setText("Ø");
+                m_fillColorBtn->setStyleSheet("background-color: #888; color: #eee; border: 1px solid #666; border-radius: 3px; font-weight: bold;");
+            }
+        }
+    } else if (auto* shape = dynamic_cast<ShapeItem*>(item)) {
+        if (m_actStrokeLbl) m_actStrokeLbl->setVisible(true);
+        if (m_actStrokeColorBtn) m_actStrokeColorBtn->setVisible(true);
+        if (m_actFillLbl) m_actFillLbl->setVisible(true);
+        if (m_actFillColorBtn) m_actFillColorBtn->setVisible(true);
+        if (m_actFontBtn) m_actFontBtn->setVisible(false);
+        if (m_actWidthLbl) m_actWidthLbl->setVisible(true);
+        if (m_actStrokeWidthSpin) m_actStrokeWidthSpin->setVisible(true);
+        if (m_actBadgeSeparator) m_actBadgeSeparator->setVisible(false);
+        if (m_actResetBadgeBtn) m_actResetBadgeBtn->setVisible(false);
+        if (m_actBlurRadiusLbl) m_actBlurRadiusLbl->setVisible(false);
+        if (m_actBlurRadiusSpin) m_actBlurRadiusSpin->setVisible(false);
+
+        if (m_strokeLbl) m_strokeLbl->setText(tr(" Stroke: "));
+        if (m_strokeColorBtn) {
+            m_strokeColorBtn->setToolTip(tr("Stroke Color"));
+            m_strokeColorBtn->setStyleSheet(QString("background-color: %1; border: 1px solid #888; border-radius: 3px;").arg(shape->strokeColor().name()));
+        }
+        if (m_fillLbl) m_fillLbl->setText(tr("  Fill: "));
+        if (m_fillColorBtn) {
+            m_fillColorBtn->setToolTip(tr("Fill Color (Ø for Transparent)"));
+            if (shape->fillColor().isValid() && shape->fillColor() != Qt::transparent && shape->fillColor().alpha() > 0) {
+                m_fillColorBtn->setText("");
+                m_fillColorBtn->setStyleSheet(QString("background-color: %1; border: 1px solid #888; border-radius: 3px;").arg(shape->fillColor().name()));
+            } else {
+                m_fillColorBtn->setText("Ø");
+                m_fillColorBtn->setStyleSheet("background-color: #888; color: #eee; border: 1px solid #666; border-radius: 3px; font-weight: bold;");
+            }
+        }
+        m_strokeWidthSpin->blockSignals(true);
+        m_strokeWidthSpin->setValue(shape->strokeWidth());
+        m_strokeWidthSpin->blockSignals(false);
+    } else if (auto* base = dynamic_cast<BaseAnnotationItem*>(item)) {
+        if (m_actStrokeLbl) m_actStrokeLbl->setVisible(true);
+        if (m_actStrokeColorBtn) m_actStrokeColorBtn->setVisible(true);
+        if (m_actFillLbl) m_actFillLbl->setVisible(false);
+        if (m_actFillColorBtn) m_actFillColorBtn->setVisible(false);
+        if (m_actFontBtn) m_actFontBtn->setVisible(false);
+        if (m_actWidthLbl) m_actWidthLbl->setVisible(true);
+        if (m_actStrokeWidthSpin) m_actStrokeWidthSpin->setVisible(true);
+        if (m_actBadgeSeparator) m_actBadgeSeparator->setVisible(false);
+        if (m_actResetBadgeBtn) m_actResetBadgeBtn->setVisible(false);
+        if (m_actBlurRadiusLbl) m_actBlurRadiusLbl->setVisible(false);
+        if (m_actBlurRadiusSpin) m_actBlurRadiusSpin->setVisible(false);
+
+        if (m_strokeLbl) m_strokeLbl->setText(tr(" Stroke: "));
+        if (m_strokeColorBtn) {
+            m_strokeColorBtn->setToolTip(tr("Stroke Color"));
+            m_strokeColorBtn->setStyleSheet(QString("background-color: %1; border: 1px solid #888; border-radius: 3px;").arg(base->strokeColor().name()));
+        }
+        m_strokeWidthSpin->blockSignals(true);
+        m_strokeWidthSpin->setValue(base->strokeWidth());
+        m_strokeWidthSpin->blockSignals(false);
     }
 }
 
@@ -644,8 +808,9 @@ void MainWindow::updateToolPropertiesVisibility(ToolType tool) {
                       tool == ToolType::Line || tool == ToolType::Arrow ||
                       tool == ToolType::DoubleArrow || tool == ToolType::Rectangle ||
                       tool == ToolType::Ellipse || tool == ToolType::Badge ||
-                      tool == ToolType::Text);
-    bool hasFill = (tool == ToolType::Rectangle || tool == ToolType::Ellipse || tool == ToolType::Text);
+                      tool == ToolType::Text || tool == ToolType::BucketFill);
+    bool hasFill = (tool == ToolType::Rectangle || tool == ToolType::Ellipse ||
+                    tool == ToolType::Text || tool == ToolType::BucketFill);
     bool hasWidth = (tool == ToolType::Pen || tool == ToolType::Highlighter ||
                      tool == ToolType::Line || tool == ToolType::Arrow ||
                      tool == ToolType::DoubleArrow || tool == ToolType::Rectangle ||

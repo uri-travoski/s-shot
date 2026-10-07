@@ -33,6 +33,9 @@ private slots:
     void testCanvasSceneUndoRedo();
     void testTextItemMultiLineAndBackground();
     void testCanvasSceneTextCreation();
+    void testBucketFillTool();
+    void testDefaultBlurStrength();
+    void testSelectionPropertiesSync();
 };
 
 void TestEditorTools::initTestCase() {
@@ -383,6 +386,111 @@ void TestEditorTools::testCanvasSceneTextCreation() {
         if (dynamic_cast<TextItem*>(item)) foundAfterRedo = true;
     }
     QVERIFY(foundAfterRedo);
+}
+
+void TestEditorTools::testBucketFillTool() {
+    TestScene scene;
+    QImage baseImg(100, 100, QImage::Format_ARGB32);
+    baseImg.fill(Qt::white);
+    // Draw a 40x40 black square in the middle (x: 30..69, y: 30..69)
+    for (int y = 30; y < 70; ++y) {
+        for (int x = 30; x < 70; ++x) {
+            baseImg.setPixelColor(x, y, Qt::black);
+        }
+    }
+    scene.setBasePixmap(QPixmap::fromImage(baseImg));
+    scene.setCurrentTool(ToolType::BucketFill);
+    scene.setFillColor(QColor(255, 0, 0)); // Red fill
+
+    // Click inside the black square at (50, 50)
+    QGraphicsSceneMouseEvent pressEv(QEvent::GraphicsSceneMousePress);
+    pressEv.setButton(Qt::LeftButton);
+    pressEv.setScenePos(QPointF(50, 50));
+    scene.mousePressEvent(&pressEv);
+
+    // Verify center pixel turned red, but outer region (10, 10) stayed white
+    QImage resultImg = scene.basePixmap().toImage();
+    QCOMPARE(resultImg.pixelColor(50, 50), QColor(255, 0, 0));
+    QCOMPARE(resultImg.pixelColor(35, 35), QColor(255, 0, 0));
+    QCOMPARE(resultImg.pixelColor(65, 65), QColor(255, 0, 0));
+    QCOMPARE(resultImg.pixelColor(10, 10), QColor(255, 255, 255));
+
+    // Test Undo
+    QVERIFY(scene.undoStack()->canUndo());
+    scene.undoStack()->undo();
+    QImage undoImg = scene.basePixmap().toImage();
+    QCOMPARE(undoImg.pixelColor(50, 50), QColor(0, 0, 0));
+    QCOMPARE(undoImg.pixelColor(10, 10), QColor(255, 255, 255));
+
+    // Test Redo
+    QVERIFY(scene.undoStack()->canRedo());
+    scene.undoStack()->redo();
+    QImage redoImg = scene.basePixmap().toImage();
+    QCOMPARE(redoImg.pixelColor(50, 50), QColor(255, 0, 0));
+
+    // Test bucket clicking a vector ShapeItem
+    ShapeItem* shape = new ShapeItem(false);
+    shape->setRect(QRectF(10, 10, 20, 20));
+    shape->setFillColor(Qt::white);
+    scene.addItem(shape);
+
+    scene.setFillColor(QColor(0, 255, 0)); // Green
+    QGraphicsSceneMouseEvent clickShape(QEvent::GraphicsSceneMousePress);
+    clickShape.setButton(Qt::LeftButton);
+    clickShape.setScenePos(QPointF(20, 20));
+    scene.mousePressEvent(&clickShape);
+
+    QCOMPARE(shape->fillColor(), QColor(0, 255, 0));
+}
+
+void TestEditorTools::testDefaultBlurStrength() {
+    CanvasScene scene;
+    QCOMPARE(scene.blurLevel(), 4);
+
+    BlurItem blur;
+    QCOMPARE(blur.blurLevel(), 4);
+}
+
+void TestEditorTools::testSelectionPropertiesSync() {
+    TestScene scene;
+    QPixmap base(200, 200);
+    base.fill(Qt::white);
+    scene.setBasePixmap(base);
+
+    // Add BlurItem
+    BlurItem* blur = new BlurItem(QRectF(20, 20, 50, 50), base, 4);
+    scene.addItem(blur);
+    blur->setSelected(true);
+    QCOMPARE(blur->blurLevel(), 4);
+
+    // Modify selected blur's level
+    blur->setBlurLevel(8);
+    blur->updateEffect(scene.basePixmap());
+    QCOMPARE(blur->blurLevel(), 8);
+
+    // Add TextItem
+    TextItem* text = new TextItem("Test Text", QPointF(100, 100));
+    text->setStrokeColor(QColor(255, 0, 0));
+    text->setFillColor(Qt::transparent);
+    scene.addItem(text);
+    text->setSelected(true);
+
+    // Modify selected text's colors
+    text->setStrokeColor(QColor(0, 0, 255));
+    text->setFillColor(QColor(255, 255, 0));
+    QCOMPARE(text->strokeColor(), QColor(0, 0, 255));
+    QCOMPARE(text->fillColor(), QColor(255, 255, 0));
+
+    // Add ShapeItem
+    ShapeItem* shape = new ShapeItem(false);
+    shape->setRect(QRectF(10, 10, 40, 40));
+    shape->setStrokeWidth(3);
+    scene.addItem(shape);
+    shape->setSelected(true);
+
+    // Modify selected shape's width
+    shape->setStrokeWidth(9);
+    QCOMPARE(shape->strokeWidth(), 9);
 }
 
 int main(int argc, char** argv) {
