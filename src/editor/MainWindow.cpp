@@ -45,6 +45,13 @@ MainWindow::MainWindow(QWidget* parent)
     // Apply currently selected theme
     applyTheme(SettingsManager::instance().theme());
 
+    // Restore window if capture was cancelled
+    connect(&CaptureManager::instance(), &CaptureManager::captureCancelled, this, [this]() {
+        show();
+        raise();
+        activateWindow();
+    });
+
     // Default blank tab on first open if no screenshot exists
     createBlankTab(800, 500);
 }
@@ -362,6 +369,19 @@ void MainWindow::setupStatusBar() {
 }
 
 void MainWindow::addImageTab(const QPixmap& pixmap, const QString& title) {
+    if (pixmap.isNull() || pixmap.width() <= 0 || pixmap.height() <= 0) {
+        return;
+    }
+
+    // If only 1 tab exists and it is the untouched initial Blank Canvas, replace it
+    if (m_tabWidget->count() == 1 && m_tabWidget->tabText(0) == tr("Blank Canvas")) {
+        CanvasView* firstView = qobject_cast<CanvasView*>(m_tabWidget->widget(0));
+        if (firstView && firstView->canvasScene() && !firstView->canvasScene()->undoStack()->canUndo()) {
+            m_tabWidget->removeTab(0);
+            firstView->deleteLater();
+        }
+    }
+
     CanvasScene* scene = new CanvasScene(this);
     scene->setBasePixmap(pixmap);
     scene->setStrokeColor(m_currentStrokeColor);
@@ -915,19 +935,31 @@ void MainWindow::updateToolPropertiesVisibility(ToolType tool) {
 }
 
 void MainWindow::onCaptureFullscreen() {
-    CaptureManager::instance().captureFullscreen();
+    hide();
+    QTimer::singleShot(250, this, []() {
+        CaptureManager::instance().captureFullscreen();
+    });
 }
 
 void MainWindow::onCaptureRegion() {
-    CaptureManager::instance().captureRegion();
+    hide();
+    QTimer::singleShot(250, this, []() {
+        CaptureManager::instance().captureRegion();
+    });
 }
 
 void MainWindow::onCaptureScrolling() {
-    CaptureManager::instance().captureScrollingWindow();
+    hide();
+    QTimer::singleShot(250, this, []() {
+        CaptureManager::instance().captureScrollingWindow();
+    });
 }
 
 void MainWindow::onColorPicker() {
-    CaptureManager::instance().pickColor();
+    hide();
+    QTimer::singleShot(250, this, []() {
+        CaptureManager::instance().pickColor();
+    });
 }
 
 void MainWindow::openSettingsDialog() {

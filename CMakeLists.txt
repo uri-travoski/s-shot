@@ -70,6 +70,7 @@ enable_testing()
 add_executable(test_editor_tools
     tests/test_editor_tools.cpp
     src/core/SettingsManager.cpp
+    src/capture/RegionSnippingOverlay.cpp
     src/editor/CanvasView.cpp
     src/editor/CanvasScene.cpp
     src/editor/items/BaseAnnotationItem.cpp
@@ -83,6 +84,7 @@ add_executable(test_editor_tools
 target_include_directories(test_editor_tools PRIVATE
     src
     src/core
+    src/capture
     src/editor
     src/editor/items
 )

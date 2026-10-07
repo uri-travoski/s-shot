@@ -255,7 +255,7 @@ void RegionSnippingOverlay::mouseReleaseEvent(QMouseEvent* event) {
         if (m_selectedRect.width() > 4 && m_selectedRect.height() > 4) {
             m_selectionDone = true;
             setCursor(Qt::ArrowCursor);
-            hide();
+
             const qreal scaleX = (width() > 0 && m_screenGrab.width() > 0) ? (static_cast<qreal>(m_screenGrab.width()) / static_cast<qreal>(width())) : 1.0;
             const qreal scaleY = (height() > 0 && m_screenGrab.height() > 0) ? (static_cast<qreal>(m_screenGrab.height()) / static_cast<qreal>(height())) : 1.0;
             QRect cropPhys(
@@ -265,7 +265,14 @@ void RegionSnippingOverlay::mouseReleaseEvent(QMouseEvent* event) {
                 qBound(1, static_cast<int>(std::round(m_selectedRect.height() * scaleY)), m_screenGrab.height())
             );
             QPixmap cropped = m_screenGrab.copy(cropPhys.intersected(m_screenGrab.rect()));
-            emit regionCaptured(cropped);
+
+            hide();
+
+            if (!cropped.isNull() && cropped.width() > 0 && cropped.height() > 0) {
+                emit regionCaptured(cropped);
+            } else {
+                emit snippingCancelled();
+            }
         } else {
             m_selectedRect = QRect();
             update();
@@ -280,9 +287,21 @@ void RegionSnippingOverlay::keyPressEvent(QKeyEvent* event) {
         emit snippingCancelled();
     } else if ((event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) && !m_selectedRect.isNull()) {
         setCursor(Qt::ArrowCursor);
+        const qreal scaleX = (width() > 0 && m_screenGrab.width() > 0) ? (static_cast<qreal>(m_screenGrab.width()) / static_cast<qreal>(width())) : 1.0;
+        const qreal scaleY = (height() > 0 && m_screenGrab.height() > 0) ? (static_cast<qreal>(m_screenGrab.height()) / static_cast<qreal>(height())) : 1.0;
+        QRect cropPhys(
+            qBound(0, static_cast<int>(std::round(m_selectedRect.x() * scaleX)), m_screenGrab.width() - 1),
+            qBound(0, static_cast<int>(std::round(m_selectedRect.y() * scaleY)), m_screenGrab.height() - 1),
+            qBound(1, static_cast<int>(std::round(m_selectedRect.width() * scaleX)), m_screenGrab.width()),
+            qBound(1, static_cast<int>(std::round(m_selectedRect.height() * scaleY)), m_screenGrab.height())
+        );
+        QPixmap cropped = m_screenGrab.copy(cropPhys.intersected(m_screenGrab.rect()));
         hide();
-        QPixmap cropped = m_screenGrab.copy(m_selectedRect);
-        emit regionCaptured(cropped);
+        if (!cropped.isNull() && cropped.width() > 0 && cropped.height() > 0) {
+            emit regionCaptured(cropped);
+        } else {
+            emit snippingCancelled();
+        }
     }
 }
 

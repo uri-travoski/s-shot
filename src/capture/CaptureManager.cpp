@@ -20,6 +20,7 @@ RegionSnippingOverlay* CaptureManager::regionOverlay() {
     if (!m_regionOverlay) {
         m_regionOverlay = new RegionSnippingOverlay();
         connect(m_regionOverlay, &RegionSnippingOverlay::regionCaptured, this, &CaptureManager::onRegionCaptured);
+        connect(m_regionOverlay, &RegionSnippingOverlay::snippingCancelled, this, &CaptureManager::captureCancelled);
     }
     return m_regionOverlay;
 }
@@ -28,6 +29,7 @@ ColorPickerOverlay* CaptureManager::colorOverlay() {
     if (!m_colorOverlay) {
         m_colorOverlay = new ColorPickerOverlay();
         connect(m_colorOverlay, &ColorPickerOverlay::colorPicked, this, &CaptureManager::onColorPicked);
+        connect(m_colorOverlay, &ColorPickerOverlay::pickingCancelled, this, &CaptureManager::captureCancelled);
     }
     return m_colorOverlay;
 }

@@ -7,6 +7,7 @@
 #include "editor/CanvasScene.h"
 #include "editor/CanvasView.h"
 #include "core/SettingsManager.h"
+#include "capture/RegionSnippingOverlay.h"
 #include "editor/items/PenItem.h"
 #include "editor/items/BlurItem.h"
 #include "editor/items/ArrowItem.h"
@@ -42,6 +43,8 @@ private slots:
     void testDefaultSaveLocation();
     void testCanvasViewDirectMousewheelZoom();
     void testBlurItemMemoryOptimization();
+    void testScreenCapture();
+    void testRegionSnippingCapture();
 };
 
 void TestEditorTools::initTestCase() {
@@ -562,6 +565,42 @@ void TestEditorTools::testBlurItemMemoryOptimization() {
 
     blur->setBlurLevel(7);
     QCOMPARE(blur->blurLevel(), 7);
+}
+
+void TestEditorTools::testScreenCapture() {
+    QScreen* screen = QGuiApplication::primaryScreen();
+    QVERIFY(screen != nullptr);
+    QRect geo = screen->virtualGeometry();
+    qDebug() << "Virtual geo:" << geo;
+    QPixmap grab = screen->grabWindow(0, geo.x(), geo.y(), geo.width(), geo.height());
+    qDebug() << "Grab size:" << grab.size() << "isNull:" << grab.isNull();
+}
+
+void TestEditorTools::testRegionSnippingCapture() {
+    RegionSnippingOverlay overlay;
+    overlay.startSnipping();
+
+    QPixmap resultPix;
+    connect(&overlay, &RegionSnippingOverlay::regionCaptured, [&resultPix](const QPixmap& p) {
+        resultPix = p;
+    });
+
+    // Simulate mouse press at (100, 100)
+    QMouseEvent press(QEvent::MouseButtonPress, QPointF(100, 100), QPointF(100, 100), Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(&overlay, &press);
+
+    // Simulate mouse move to (300, 250)
+    QMouseEvent move(QEvent::MouseMove, QPointF(300, 250), QPointF(300, 250), Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(&overlay, &move);
+
+    // Simulate mouse release at (300, 250)
+    QMouseEvent release(QEvent::MouseButtonRelease, QPointF(300, 250), QPointF(300, 250), Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(&overlay, &release);
+
+    // Verify resultPix is NOT null and has correct non-zero size
+    QVERIFY(!resultPix.isNull());
+    QVERIFY(resultPix.width() >= 100);
+    QVERIFY(resultPix.height() >= 100);
 }
 
 int main(int argc, char** argv) {

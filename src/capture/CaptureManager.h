@@ -22,6 +22,7 @@ public:
 signals:
     void screenshotReady(const QPixmap& pixmap);
     void colorPicked(const QColor& color, const QString& hex);
+    void captureCancelled();
 
 private slots:
     void doCaptureFullscreen();
