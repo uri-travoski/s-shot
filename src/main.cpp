@@ -54,6 +54,9 @@ int main(int argc, char* argv[]) {
     QCommandLineOption editorOption("editor", "Open annotation editor.");
     parser.addOption(editorOption);
 
+    QCommandLineOption colorpickerOption("colorpicker", "Pick color from screen immediately.");
+    parser.addOption(colorpickerOption);
+
     parser.addPositionalArgument("file", "Image file to open", "[file]");
     parser.process(app);
 
@@ -126,6 +129,8 @@ int main(int argc, char* argv[]) {
                     captureMgr.captureFullscreen();
                 } else if (token == "--region") {
                     captureMgr.captureRegion();
+                } else if (token == "--colorpicker") {
+                    captureMgr.pickColor();
                 } else if (token == "--editor") {
                     MainWindow* win = getMainWindow();
                     win->show();
@@ -151,6 +156,8 @@ int main(int argc, char* argv[]) {
         captureMgr.captureFullscreen();
     } else if (parser.isSet(regionOption)) {
         captureMgr.captureRegion();
+    } else if (parser.isSet(colorpickerOption)) {
+        captureMgr.pickColor();
     } else if (parser.isSet(editorOption)) {
         MainWindow* win = getMainWindow();
         win->show();

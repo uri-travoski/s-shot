@@ -7,6 +7,7 @@
 ColorPickerOverlay::ColorPickerOverlay(QWidget* parent)
     : QWidget(parent, Qt::Window | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint | Qt::BypassWindowManagerHint)
 {
+    setAttribute(Qt::WA_TranslucentBackground, false);
     setAttribute(Qt::WA_DeleteOnClose, false);
     setMouseTracking(true);
     setCursor(Qt::CrossCursor);
@@ -20,7 +21,7 @@ void ColorPickerOverlay::startPicking() {
     m_screenGrab = screen->grabWindow(0, virtualGeo.x(), virtualGeo.y(), virtualGeo.width(), virtualGeo.height());
     m_currentPos = QCursor::pos() - virtualGeo.topLeft();
 
-    setCursor(Qt::BlankCursor);
+    setCursor(Qt::CrossCursor);
     showFullScreen();
     raise();
     activateWindow();
@@ -39,10 +40,29 @@ void ColorPickerOverlay::paintEvent(QPaintEvent*) {
     const int diameter = srcSpan * zoomFactor; // 152 pixels
     const int radius = diameter / 2; // 76 pixels
 
-    // Center loupe directly on current cursor position
-    QRect loupeRect(m_currentPos.x() - radius, m_currentPos.y() - radius, diameter, diameter);
+    // Position loupe offset from the cross (cursor pos) - a few cm away next to it
+    int offset = 32;
+    int loupeX = m_currentPos.x() + offset;
+    int loupeY = m_currentPos.y() + offset;
 
-    // Extract 19x19 source pixel region safely with boundary clipping
+    int cardH = 46;
+    int totalH = diameter + cardH + 20;
+
+    // Flip horizontally if near right screen edge
+    if (loupeX + diameter > width() - 10) {
+        loupeX = m_currentPos.x() - offset - diameter;
+    }
+    // Flip vertically if near bottom screen edge
+    if (loupeY + totalH > height() - 10) {
+        loupeY = m_currentPos.y() - offset - diameter;
+    }
+
+    if (loupeX < 8) loupeX = 8;
+    if (loupeY < 8) loupeY = 8;
+
+    QRect loupeRect(loupeX, loupeY, diameter, diameter);
+
+    // Extract 19x19 source pixel region safely with boundary clipping centered at the cross
     QRect srcRect(m_currentPos.x() - K, m_currentPos.y() - K, srcSpan, srcSpan);
     QRect validScreenRect = srcRect.intersected(m_screenGrab.rect());
 
@@ -66,25 +86,18 @@ void ColorPickerOverlay::paintEvent(QPaintEvent*) {
     p.drawPixmap(loupeRect.topLeft(), zoomed);
 
     // 2. Pixel grid
-    p.setPen(QPen(QColor(255, 255, 255, 35), 1));
+    p.setPen(QPen(QColor(255, 255, 255, 30), 1));
     for (int i = 0; i <= diameter; i += zoomFactor) {
         p.drawLine(loupeRect.left() + i, loupeRect.top(), loupeRect.left() + i, loupeRect.bottom());
         p.drawLine(loupeRect.left(), loupeRect.top() + i, loupeRect.right(), loupeRect.top() + i);
     }
 
-    // 3. Precision reticle & center pixel highlight
-    QRect centerPixelRect(m_currentPos.x() - zoomFactor / 2, m_currentPos.y() - zoomFactor / 2, zoomFactor, zoomFactor);
+    // 3. Highlight center target pixel (exact pixel directly at the cross)
+    int centerLoupeX = loupeRect.left() + radius;
+    int centerLoupeY = loupeRect.top() + radius;
+    QRect centerPixelRect(centerLoupeX - zoomFactor / 2, centerLoupeY - zoomFactor / 2, zoomFactor, zoomFactor);
 
     p.setPen(QPen(QColor(48, 229, 0, 220), 1.5));
-    // Horizontal crosshair lines
-    p.drawLine(loupeRect.left(), m_currentPos.y(), centerPixelRect.left(), m_currentPos.y());
-    p.drawLine(centerPixelRect.right() + 1, m_currentPos.y(), loupeRect.right(), m_currentPos.y());
-    // Vertical crosshair lines
-    p.drawLine(m_currentPos.x(), loupeRect.top(), m_currentPos.x(), centerPixelRect.top());
-    p.drawLine(m_currentPos.x(), centerPixelRect.bottom() + 1, m_currentPos.x(), loupeRect.bottom());
-
-    // Highlight center target pixel box
-    p.setPen(QPen(QColor(48, 229, 0), 1.5));
     p.setBrush(Qt::NoBrush);
     p.drawRect(centerPixelRect);
 
@@ -98,23 +111,22 @@ void ColorPickerOverlay::paintEvent(QPaintEvent*) {
     p.setPen(QPen(QColor(48, 229, 0), 2.5));
     p.drawEllipse(loupeRect);
 
-    // 5. Read pixel color
+    // 5. Read pixel color at the cross
     int px = qBound(0, m_currentPos.x(), m_screenGrab.width() - 1);
     int py = qBound(0, m_currentPos.y(), m_screenGrab.height() - 1);
     QColor color = m_screenGrab.toImage().pixelColor(px, py);
     QString hex = color.name(QColor::HexRgb).toUpper();
     QString rgbStr = QString("RGB(%1, %2, %3)").arg(color.red()).arg(color.green()).arg(color.blue());
 
-    // 6. Smart Info Card
+    // 6. Smart Info Card (positioned below loupe)
     int cardW = 160;
-    int cardH = 46;
-    int cardX = m_currentPos.x() - cardW / 2;
+    int cardX = loupeRect.center().x() - cardW / 2;
     if (cardX < 6) cardX = 6;
     if (cardX + cardW > width() - 6) cardX = width() - cardW - 6;
 
-    int cardY = m_currentPos.y() + radius + 10;
+    int cardY = loupeRect.bottom() + 8;
     if (cardY + cardH > height() - 8) {
-        cardY = m_currentPos.y() - radius - cardH - 10;
+        cardY = loupeRect.top() - cardH - 8;
     }
 
     QRect infoRect(cardX, cardY, cardW, cardH);
