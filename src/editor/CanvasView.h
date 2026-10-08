@@ -21,6 +21,7 @@ public:
     void zoomFit();
 
     void applyTheme(bool isLight);
+    void updateToolCursor();
 
 signals:
     void zoomChanged(double factor);

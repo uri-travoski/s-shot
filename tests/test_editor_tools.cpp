@@ -29,6 +29,7 @@
 #include <QClipboard>
 #include <QMimeData>
 #include <QMenuBar>
+#include <QScrollBar>
 
 class TestScene : public CanvasScene {
 public:
@@ -72,6 +73,7 @@ private slots:
     void testToolbarIconsAndActions();
     void testTextItemMultipleBlocksSelect();
     void testCrashHandlerAndLogging();
+    void testPanToolAndCanvasResizeHandles();
 };
 
 void TestEditorTools::initTestCase() {
@@ -262,7 +264,7 @@ void TestEditorTools::testCanvasSceneToolIntegration() {
     releaseEv.setScenePos(QPointF(60, 40));
     scene.mouseReleaseEvent(&releaseEv);
 
-    QCOMPARE(scene.items().count(), 3);
+    QCOMPARE(scene.items().count(), 5);
 
     scene.setCurrentTool(ToolType::Blur);
     scene.setBlurLevel(7);
@@ -275,7 +277,7 @@ void TestEditorTools::testCanvasSceneToolIntegration() {
     releaseEv.setScenePos(QPointF(150, 150));
     scene.mouseReleaseEvent(&releaseEv);
 
-    QCOMPARE(scene.items().count(), 4);
+    QCOMPARE(scene.items().count(), 6);
 }
 
 void TestEditorTools::testCanvasSceneAreaSelectionAndCrop() {
@@ -675,6 +677,7 @@ void TestEditorTools::testAutoCheckUpdatesSetting() {
 
 void TestEditorTools::testUpdateManagerVersionComparison() {
     // Newer remote versions
+    QVERIFY(UpdateManager::isVersionNewer("v1.27", "1.26"));
     QVERIFY(UpdateManager::isVersionNewer("v1.26", "1.25"));
     QVERIFY(UpdateManager::isVersionNewer("v1.25", "1.24"));
     QVERIFY(UpdateManager::isVersionNewer("v1.24", "1.23"));
@@ -1116,7 +1119,7 @@ void TestEditorTools::testToolbarIconsAndActions() {
     const QStringList iconNames = {
         "new", "open", "save", "copy", "paste", "undo", "redo",
         "zoom_in", "zoom_out", "zoom_100", "zoom_fit",
-        "select", "text", "arrow", "pen", "highlighter", "line",
+        "hand", "select", "text", "arrow", "pen", "highlighter", "line",
         "double_arrow", "rect", "ellipse", "badge", "blur", "bucket", "crop",
         "fullscreen", "snip", "scroll", "picker", "settings", "about", "quit", "s-shot"
     };
@@ -1254,6 +1257,141 @@ void TestEditorTools::testCrashHandlerAndLogging() {
         }
     }
     QVERIFY(logsAction != nullptr);
+}
+
+void TestEditorTools::testPanToolAndCanvasResizeHandles() {
+    MainWindow win;
+    win.createBlankTab(800, 600);
+    win.resize(1000, 700);
+    win.show();
+    QTest::qWait(50);
+
+    CanvasScene* scene = win.currentScene();
+    CanvasView* view = win.currentView();
+    QVERIFY(scene != nullptr);
+    QVERIFY(view != nullptr);
+
+    // 1. Pan / Hand Tool verification
+    win.selectTool(ToolType::Pan);
+    QTest::qWait(50);
+    QCOMPARE(scene->currentTool(), ToolType::Pan);
+    QCOMPARE(view->viewport()->cursor().shape(), Qt::OpenHandCursor);
+
+    // Verify viewport panning with mouse press and drag in Pan mode
+    QPoint centerViewPt(view->viewport()->width() / 2, view->viewport()->height() / 2);
+    QTest::mousePress(view->viewport(), Qt::LeftButton, Qt::NoModifier, centerViewPt);
+    QTest::mouseMove(view->viewport(), centerViewPt - QPoint(30, 30));
+    QTest::mouseRelease(view->viewport(), Qt::LeftButton, Qt::NoModifier, centerViewPt - QPoint(30, 30));
+    // Cursor should return to OpenHandCursor after release
+    QCOMPARE(view->viewport()->cursor().shape(), Qt::OpenHandCursor);
+
+    QPixmap preview = win.grab();
+    preview.save("/home/owner/distrobox-homes/devbox/.gemini/antigravity/brain/e77fcd3f-2a52-4f22-843d-d82ecd75f998/palm_tool_and_handles_preview.png");
+
+    // 2. Handle hit-testing on 800x600 scene
+    // Handles: Top (400, 0), Bottom (400, 600), Left (0, 300), Right (800, 300),
+    // Corners: (0, 0), (800, 0), (0, 600), (800, 600)
+    QCOMPARE(scene->handleAt(QPointF(400, 0)), CanvasScene::CanvasHandle::Top);
+    QCOMPARE(scene->handleAt(QPointF(400, 600)), CanvasScene::CanvasHandle::Bottom);
+    QCOMPARE(scene->handleAt(QPointF(0, 300)), CanvasScene::CanvasHandle::Left);
+    QCOMPARE(scene->handleAt(QPointF(800, 300)), CanvasScene::CanvasHandle::Right);
+    QCOMPARE(scene->handleAt(QPointF(0, 0)), CanvasScene::CanvasHandle::TopLeft);
+    QCOMPARE(scene->handleAt(QPointF(800, 0)), CanvasScene::CanvasHandle::TopRight);
+    QCOMPARE(scene->handleAt(QPointF(0, 600)), CanvasScene::CanvasHandle::BottomLeft);
+    QCOMPARE(scene->handleAt(QPointF(800, 600)), CanvasScene::CanvasHandle::BottomRight);
+    QCOMPARE(scene->handleAt(QPointF(400, 300)), CanvasScene::CanvasHandle::None);
+
+    // Verify handle cursors
+    QCOMPARE(CanvasScene::cursorForHandle(CanvasScene::CanvasHandle::Top), Qt::SizeVerCursor);
+    QCOMPARE(CanvasScene::cursorForHandle(CanvasScene::CanvasHandle::Bottom), Qt::SizeVerCursor);
+    QCOMPARE(CanvasScene::cursorForHandle(CanvasScene::CanvasHandle::Left), Qt::SizeHorCursor);
+    QCOMPARE(CanvasScene::cursorForHandle(CanvasScene::CanvasHandle::Right), Qt::SizeHorCursor);
+    QCOMPARE(CanvasScene::cursorForHandle(CanvasScene::CanvasHandle::TopLeft), Qt::SizeFDiagCursor);
+    QCOMPARE(CanvasScene::cursorForHandle(CanvasScene::CanvasHandle::BottomRight), Qt::SizeFDiagCursor);
+    QCOMPARE(CanvasScene::cursorForHandle(CanvasScene::CanvasHandle::TopRight), Qt::SizeBDiagCursor);
+    QCOMPARE(CanvasScene::cursorForHandle(CanvasScene::CanvasHandle::BottomLeft), Qt::SizeBDiagCursor);
+
+    // 3. Canvas Resizing Operations & Undo/Redo
+    QCOMPARE(scene->basePixmap().size(), QSize(800, 600));
+
+    // Expand Right edge by 150px and Bottom by 100px
+    scene->resizeCanvas(QRectF(0, 0, 950, 700), "Expand Canvas Bottom-Right");
+    QCOMPARE(scene->basePixmap().size(), QSize(950, 700));
+    QCOMPARE(scene->sceneRect(), QRectF(0, 0, 950, 700));
+
+    // Undo expansion
+    QVERIFY(scene->undoStack()->canUndo());
+    scene->undoStack()->undo();
+    QCOMPARE(scene->basePixmap().size(), QSize(800, 600));
+    QCOMPARE(scene->sceneRect(), QRectF(0, 0, 800, 600));
+
+    // Redo expansion
+    QVERIFY(scene->undoStack()->canRedo());
+    scene->undoStack()->redo();
+    QCOMPARE(scene->basePixmap().size(), QSize(950, 700));
+    QCOMPARE(scene->sceneRect(), QRectF(0, 0, 950, 700));
+
+    // Reset back to 800x600 for item test
+    scene->undoStack()->undo();
+    QCOMPARE(scene->basePixmap().size(), QSize(800, 600));
+
+    // 4. Left/Top Expansion with Vector Item Shifting
+    ShapeItem* rectItem = new ShapeItem(false);
+    rectItem->setRect(QRectF(0, 0, 100, 50));
+    rectItem->setPos(100, 100);
+    scene->addItem(rectItem);
+    QCOMPARE(rectItem->pos(), QPointF(100, 100));
+
+    // Expand Left by 80px and Top by 50px (bounds: -80, -50, 880, 650)
+    scene->resizeCanvas(QRectF(-80, -50, 880, 650), "Expand Canvas Top-Left");
+    QCOMPARE(scene->basePixmap().size(), QSize(880, 650));
+    // Item should have been shifted by (+80, +50) so pos is now (180, 150)
+    QCOMPARE(rectItem->pos(), QPointF(180, 150));
+
+    // Undo left/top expansion
+    scene->undoStack()->undo();
+    QCOMPARE(scene->basePixmap().size(), QSize(800, 600));
+    // Item should be shifted back by (-80, -50) to original position
+    QCOMPARE(rectItem->pos(), QPointF(100, 100));
+
+    // Redo left/top expansion
+    scene->undoStack()->redo();
+    QCOMPARE(scene->basePixmap().size(), QSize(880, 650));
+    QCOMPARE(rectItem->pos(), QPointF(180, 150));
+
+    // 5. Clean renderToPixmap() - frame items and guides should not appear
+    QPixmap rendered = scene->renderToPixmap();
+    QCOMPARE(rendered.size(), QSize(880, 650));
+
+    // 6. Interactive mouse dragging of handle via TestScene
+    TestScene testScene;
+    QPixmap base(400, 300);
+    base.fill(Qt::white);
+    testScene.setBasePixmap(base);
+    testScene.setCurrentTool(ToolType::Select);
+
+    QPointF rightHandle(400, 150);
+    QCOMPARE(testScene.handleAt(rightHandle), CanvasScene::CanvasHandle::Right);
+
+    QGraphicsSceneMouseEvent pressEv(QEvent::GraphicsSceneMousePress);
+    pressEv.setScenePos(rightHandle);
+    pressEv.setButton(Qt::LeftButton);
+    pressEv.setButtons(Qt::LeftButton);
+    testScene.mousePressEvent(&pressEv);
+    QCOMPARE(testScene.activeHandle(), CanvasScene::CanvasHandle::Right);
+
+    QGraphicsSceneMouseEvent moveEv(QEvent::GraphicsSceneMouseMove);
+    moveEv.setScenePos(QPointF(450, 150));
+    moveEv.setButtons(Qt::LeftButton);
+    testScene.mouseMoveEvent(&moveEv);
+
+    QGraphicsSceneMouseEvent releaseEv(QEvent::GraphicsSceneMouseRelease);
+    releaseEv.setScenePos(QPointF(450, 150));
+    releaseEv.setButton(Qt::LeftButton);
+    testScene.mouseReleaseEvent(&releaseEv);
+
+    QCOMPARE(testScene.activeHandle(), CanvasScene::CanvasHandle::None);
+    QCOMPARE(testScene.basePixmap().width(), 450);
 }
 
 int main(int argc, char** argv) {

@@ -94,6 +94,7 @@ private:
 
     // Tool actions
     QActionGroup* m_toolActionGroup = nullptr;
+    QAction* m_actPan = nullptr;
     QAction* m_actSelect = nullptr;
     QAction* m_actPen = nullptr;
     QAction* m_actHighlighter = nullptr;

@@ -62,6 +62,7 @@ void CanvasView::applyTheme(bool isLight) {
             "QPushButton:hover { background-color: #484848; border-color: #666666; color: #ffffff; }"
         );
     }
+    updateToolCursor();
 }
 
 void CanvasView::applyZoom(qreal factor) {
@@ -118,7 +119,50 @@ void CanvasView::wheelEvent(QWheelEvent* event) {
     event->accept();
 }
 
+void CanvasView::updateToolCursor() {
+    if (!m_scene) {
+        unsetCursor();
+        return;
+    }
+    switch (m_scene->currentTool()) {
+    case ToolType::Pan:
+        setCursor(Qt::OpenHandCursor);
+        break;
+    case ToolType::Select:
+        setCursor(Qt::ArrowCursor);
+        break;
+    case ToolType::Pen:
+    case ToolType::Highlighter:
+    case ToolType::Line:
+    case ToolType::Arrow:
+    case ToolType::DoubleArrow:
+    case ToolType::Rectangle:
+    case ToolType::Ellipse:
+    case ToolType::Badge:
+    case ToolType::Blur:
+    case ToolType::Crop:
+        setCursor(Qt::CrossCursor);
+        break;
+    case ToolType::Text:
+        setCursor(Qt::IBeamCursor);
+        break;
+    case ToolType::BucketFill:
+        setCursor(Qt::PointingHandCursor);
+        break;
+    }
+}
+
 void CanvasView::mousePressEvent(QMouseEvent* event) {
+    if (m_scene && m_scene->currentTool() == ToolType::Pan && event->button() == Qt::LeftButton) {
+        QPointF scPos = mapToScene(event->pos());
+        if (m_scene->handleAt(scPos) == CanvasScene::CanvasHandle::None) {
+            m_isPanning = true;
+            m_panStart = event->pos();
+            setCursor(Qt::ClosedHandCursor);
+            event->accept();
+            return;
+        }
+    }
     if (event->button() == Qt::MiddleButton || (event->button() == Qt::LeftButton && (event->modifiers() & Qt::AltModifier))) {
         m_isPanning = true;
         m_panStart = event->pos();
@@ -145,9 +189,9 @@ void CanvasView::mouseMoveEvent(QMouseEvent* event) {
 }
 
 void CanvasView::mouseReleaseEvent(QMouseEvent* event) {
-    if (m_isPanning) {
+    if (m_isPanning && (event->button() == Qt::LeftButton || event->button() == Qt::MiddleButton)) {
         m_isPanning = false;
-        setCursor(Qt::ArrowCursor);
+        updateToolCursor();
         event->accept();
         return;
     }

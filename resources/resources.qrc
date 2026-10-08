@@ -34,7 +34,9 @@
     <file>icons/quit.svg</file>
     <file>icons/paste.svg</file>
     <file>icons/move.svg</file>
+    <file>icons/hand.svg</file>
 
+    <file>icons/light/hand.svg</file>
     <file>icons/light/select.svg</file>
     <file>icons/light/pen.svg</file>
     <file>icons/light/highlighter.svg</file>

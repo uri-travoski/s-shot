@@ -62,6 +62,28 @@ public:
     void cropToArea(const QRectF& rect);
     void cropToSelectedArea();
 
+    // Canvas edge resize handles
+    enum class CanvasHandle {
+        None,
+        Top,
+        Bottom,
+        Left,
+        Right,
+        TopLeft,
+        TopRight,
+        BottomLeft,
+        BottomRight
+    };
+
+    CanvasHandle handleAt(const QPointF& pos) const;
+    QRectF handleRect(CanvasHandle h) const;
+    static Qt::CursorShape cursorForHandle(CanvasHandle h);
+    CanvasHandle activeHandle() const { return m_activeHandle; }
+    CanvasHandle hoveredHandle() const { return m_hoveredHandle; }
+    void resizeCanvas(const QRectF& newBounds, const QString& undoText = "Resize Canvas");
+    void shiftAnnotationItems(const QPointF& offset);
+    bool isSystemItem(QGraphicsItem* item) const;
+
 signals:
     void areaSelectionChanged(const QRectF& area, bool active);
     void sceneModified();
@@ -100,4 +122,12 @@ private:
     bool m_isSelectingArea = false;
     QRectF m_selectedArea;
     QGraphicsRectItem* m_areaSelectionRectItem = nullptr;
+
+    // Canvas edge resize state
+    QGraphicsItem* m_canvasFrameItem = nullptr;
+    QGraphicsRectItem* m_canvasResizeGuideItem = nullptr;
+    CanvasHandle m_activeHandle = CanvasHandle::None;
+    CanvasHandle m_hoveredHandle = CanvasHandle::None;
+    bool m_isResizingCanvas = false;
+    QRectF m_resizeOriginalRect;
 };

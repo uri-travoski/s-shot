@@ -1,6 +1,7 @@
 #pragma once
 
 enum class ToolType {
+    Pan,
     Select,
     Pen,
     Highlighter,

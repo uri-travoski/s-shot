@@ -410,6 +410,7 @@ void MainWindow::setupToolbars() {
         return act;
     };
 
+    m_actPan = addToolAct("hand", tr("Pan / Move Canvas (Hand Tool)"), ToolType::Pan);
     m_actSelect = addToolAct("select", tr("Select / Area Tool (Copy/Cut/Move/Delete/Crop)"), ToolType::Select, true);
     m_actText = addToolAct("text", tr("Text"), ToolType::Text);
     m_actArrow = addToolAct("arrow", tr("Arrow"), ToolType::Arrow);
@@ -461,6 +462,12 @@ void MainWindow::addImageTab(const QPixmap& pixmap, const QString& title) {
     scene->setCurrentFont(m_currentFont);
     connect(scene, &QGraphicsScene::selectionChanged, this, &MainWindow::onSceneSelectionChanged);
     connect(scene, &CanvasScene::badgeCounterChanged, this, &MainWindow::onBadgeCounterChanged);
+    connect(scene, &CanvasScene::sceneModified, this, [this, scene]() {
+        QPixmap p = scene->basePixmap();
+        if (m_statusDimensions) {
+            m_statusDimensions->setText(QString("%1 × %2 px").arg(p.width()).arg(p.height()));
+        }
+    });
 
     QAction* activeAct = m_toolActionGroup->checkedAction();
     if (activeAct) {
@@ -471,6 +478,7 @@ void MainWindow::addImageTab(const QPixmap& pixmap, const QString& title) {
     view->applyTheme(SettingsManager::instance().theme() == "Light");
     connect(view, &CanvasView::zoomChanged, this, &MainWindow::onZoomChanged);
     connect(view, &CanvasView::mouseMovedTo, this, &MainWindow::onCursorMoved);
+    view->updateToolCursor();
 
     QString tabTitle = title.isEmpty() ? QString("Capture %1").arg(m_tabWidget->count() + 1) : title;
     int idx = m_tabWidget->addTab(view, tabTitle);

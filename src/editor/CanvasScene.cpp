@@ -9,6 +9,7 @@
 #include <QClipboard>
 #include <QGuiApplication>
 #include <QDebug>
+#include "CanvasView.h"
 #include "../core/ClipboardHelper.h"
 
 // --- Undo Commands ---
@@ -83,6 +84,99 @@ private:
     QPixmap m_newPix;
 };
 
+class ResizeCanvasCommand : public QUndoCommand {
+public:
+    ResizeCanvasCommand(CanvasScene* scene, const QPixmap& oldPix, const QPixmap& newPix,
+                        const QPointF& itemShift, const QString& text = "Resize Canvas",
+                        QUndoCommand* parent = nullptr)
+        : QUndoCommand(parent), m_scene(scene), m_oldPix(oldPix), m_newPix(newPix),
+          m_shift(itemShift) {
+        setText(text);
+    }
+    void undo() override {
+        m_scene->shiftAnnotationItems(-m_shift);
+        m_scene->setBasePixmap(m_oldPix);
+    }
+    void redo() override {
+        if (m_executedOnce) {
+            m_scene->shiftAnnotationItems(m_shift);
+            m_scene->setBasePixmap(m_newPix);
+        } else {
+            m_executedOnce = true;
+        }
+    }
+private:
+    CanvasScene* m_scene;
+    QPixmap m_oldPix;
+    QPixmap m_newPix;
+    QPointF m_shift;
+    bool m_executedOnce = false;
+};
+
+class CanvasFrameItem : public QGraphicsItem {
+public:
+    explicit CanvasFrameItem(CanvasScene* scene, QGraphicsItem* parent = nullptr)
+        : QGraphicsItem(parent), m_scene(scene) {
+        setZValue(9500);
+        setAcceptedMouseButtons(Qt::NoButton);
+    }
+
+    void notifyGeometryChange() {
+        prepareGeometryChange();
+    }
+
+    QRectF boundingRect() const override {
+        if (!m_scene) return QRectF();
+        QRectF r = m_scene->sceneRect();
+        return r.adjusted(-12, -12, 12, 12);
+    }
+
+    QPainterPath shape() const override {
+        // Empty shape so frame doesn't block underlying annotation items from itemAt() queries
+        return QPainterPath();
+    }
+
+    void paint(QPainter* painter, const QStyleOptionGraphicsItem* /*option*/, QWidget* /*widget*/) override {
+        if (!m_scene) return;
+        QRectF r = m_scene->sceneRect();
+        if (r.isEmpty()) return;
+
+        painter->setRenderHint(QPainter::Antialiasing, true);
+
+        // 1. Subtle dashed border outlining current canvas
+        QPen borderPen(QColor(120, 120, 120, 180), 1, Qt::DashLine);
+        painter->setPen(borderPen);
+        painter->setBrush(Qt::NoBrush);
+        painter->drawRect(r);
+
+        // 2. Draw 8 edge/corner resize handles
+        CanvasScene::CanvasHandle activeH = m_scene->activeHandle();
+        CanvasScene::CanvasHandle hoveredH = m_scene->hoveredHandle();
+
+        const CanvasScene::CanvasHandle allHandles[] = {
+            CanvasScene::CanvasHandle::TopLeft, CanvasScene::CanvasHandle::Top,
+            CanvasScene::CanvasHandle::TopRight, CanvasScene::CanvasHandle::Right,
+            CanvasScene::CanvasHandle::BottomRight, CanvasScene::CanvasHandle::Bottom,
+            CanvasScene::CanvasHandle::BottomLeft, CanvasScene::CanvasHandle::Left
+        };
+
+        for (CanvasScene::CanvasHandle h : allHandles) {
+            QRectF hr = m_scene->handleRect(h);
+            bool isHot = (h == activeH || (activeH == CanvasScene::CanvasHandle::None && h == hoveredH));
+
+            QColor fillCol = isHot ? QColor(48, 229, 0) : QColor(255, 255, 255);
+            QColor strokeCol = isHot ? QColor(20, 120, 0) : QColor(50, 50, 50);
+
+            painter->setPen(QPen(strokeCol, 1.2));
+            painter->setBrush(fillCol);
+            painter->drawRoundedRect(hr, 2, 2);
+        }
+    }
+
+private:
+    CanvasScene* m_scene = nullptr;
+};
+
 // --- CanvasScene ---
 
 CanvasScene::CanvasScene(QObject* parent)
@@ -92,6 +186,16 @@ CanvasScene::CanvasScene(QObject* parent)
     m_basePixmapItem->setZValue(-1000);
     addItem(m_basePixmapItem);
 
+    m_canvasFrameItem = new CanvasFrameItem(this);
+    addItem(m_canvasFrameItem);
+
+    m_canvasResizeGuideItem = new QGraphicsRectItem();
+    m_canvasResizeGuideItem->setZValue(9600);
+    m_canvasResizeGuideItem->setPen(QPen(QColor(48, 229, 0), 2, Qt::DashLine));
+    m_canvasResizeGuideItem->setBrush(QColor(48, 229, 0, 25));
+    m_canvasResizeGuideItem->setVisible(false);
+    addItem(m_canvasResizeGuideItem);
+
     m_areaSelectionRectItem = new QGraphicsRectItem();
     m_areaSelectionRectItem->setZValue(10000);
     m_areaSelectionRectItem->setPen(QPen(QColor(48, 229, 0), 2, Qt::DashLine));
@@ -100,10 +204,19 @@ CanvasScene::CanvasScene(QObject* parent)
     addItem(m_areaSelectionRectItem);
 }
 
+bool CanvasScene::isSystemItem(QGraphicsItem* item) const {
+    return item == m_basePixmapItem || item == m_areaSelectionRectItem ||
+           item == m_canvasFrameItem || item == m_canvasResizeGuideItem;
+}
+
 void CanvasScene::setBasePixmap(const QPixmap& pixmap) {
     m_basePixmapItem->setPixmap(pixmap);
     setSceneRect(pixmap.rect());
     clearAreaSelection();
+    if (m_canvasFrameItem) {
+        static_cast<CanvasFrameItem*>(m_canvasFrameItem)->notifyGeometryChange();
+        m_canvasFrameItem->update();
+    }
     emit sceneModified();
 }
 
@@ -122,8 +235,10 @@ QPixmap CanvasScene::renderToPixmap() const {
     painter.setRenderHint(QPainter::Antialiasing, true);
     painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
 
-    // Hide selection markers during export
+    // Hide selection markers, canvas frame, and guides during export
     if (m_areaSelectionRectItem) m_areaSelectionRectItem->setVisible(false);
+    if (m_canvasFrameItem) m_canvasFrameItem->setVisible(false);
+    if (m_canvasResizeGuideItem) m_canvasResizeGuideItem->setVisible(false);
 
     // Finish editing on any active text item during export
     for (auto* item : items()) {
@@ -141,11 +256,12 @@ QPixmap CanvasScene::renderToPixmap() const {
 
     const_cast<CanvasScene*>(this)->render(&painter, sr, sr);
 
-    // Restore selection
+    // Restore selection and frame
     for (auto* item : selected) item->setSelected(true);
     if (hasAreaSelection() && m_areaSelectionRectItem) {
         m_areaSelectionRectItem->setVisible(true);
     }
+    if (m_canvasFrameItem) m_canvasFrameItem->setVisible(true);
     const_cast<CanvasScene*>(this)->blockSignals(oldBlock);
 
     return result;
@@ -158,7 +274,7 @@ void CanvasScene::setCurrentTool(ToolType tool) {
     // Enable/disable movable flags depending on tool
     auto allItems = items();
     for (auto* item : allItems) {
-        if (item != m_basePixmapItem && item != m_areaSelectionRectItem) {
+        if (!isSystemItem(item)) {
             item->setFlag(QGraphicsItem::ItemIsSelectable, tool == ToolType::Select);
             item->setFlag(QGraphicsItem::ItemIsMovable, tool == ToolType::Select);
             if (auto* txt = dynamic_cast<TextItem*>(item)) {
@@ -166,6 +282,12 @@ void CanvasScene::setCurrentTool(ToolType tool) {
                     txt->finishEditing();
                 }
             }
+        }
+    }
+
+    for (auto* view : views()) {
+        if (auto* cv = qobject_cast<CanvasView*>(view)) {
+            cv->updateToolCursor();
         }
     }
 }
@@ -264,13 +386,117 @@ void CanvasScene::cropToArea(const QRectF& rect) {
     // Shift vector items to account for crop origin
     QPointF offset(-cropRect.x(), -cropRect.y());
     for (auto* item : items()) {
-        if (item != m_basePixmapItem && item != m_areaSelectionRectItem) {
+        if (!isSystemItem(item)) {
             item->setPos(item->pos() + offset);
         }
     }
 
     m_undoStack.push(new ModifyPixmapCommand(this, oldPix, newPix, "Crop Image"));
     clearAreaSelection();
+}
+
+QRectF CanvasScene::handleRect(CanvasHandle h) const {
+    QRectF r = sceneRect();
+    if (r.isEmpty() && m_basePixmapItem) {
+        r = m_basePixmapItem->pixmap().rect();
+    }
+    qreal s = 9.0;
+    qreal half = s / 2.0;
+    qreal w = r.width();
+    qreal hgt = r.height();
+    qreal x = r.x();
+    qreal y = r.y();
+
+    switch (h) {
+    case CanvasHandle::TopLeft:     return QRectF(x - half, y - half, s, s);
+    case CanvasHandle::Top:         return QRectF(x + w / 2.0 - half, y - half, s, s);
+    case CanvasHandle::TopRight:    return QRectF(x + w - half, y - half, s, s);
+    case CanvasHandle::Right:       return QRectF(x + w - half, y + hgt / 2.0 - half, s, s);
+    case CanvasHandle::BottomRight: return QRectF(x + w - half, y + hgt - half, s, s);
+    case CanvasHandle::Bottom:      return QRectF(x + w / 2.0 - half, y + hgt - half, s, s);
+    case CanvasHandle::BottomLeft:  return QRectF(x - half, y + hgt - half, s, s);
+    case CanvasHandle::Left:        return QRectF(x - half, y + hgt / 2.0 - half, s, s);
+    default:                        return QRectF();
+    }
+}
+
+CanvasScene::CanvasHandle CanvasScene::handleAt(const QPointF& pos) const {
+    const CanvasHandle allHandles[] = {
+        CanvasHandle::TopLeft, CanvasHandle::TopRight,
+        CanvasHandle::BottomLeft, CanvasHandle::BottomRight,
+        CanvasHandle::Top, CanvasHandle::Bottom,
+        CanvasHandle::Left, CanvasHandle::Right
+    };
+
+    const qreal hitRadius = 3.0;
+    for (CanvasHandle h : allHandles) {
+        QRectF hr = handleRect(h);
+        QRectF hitZone = hr.adjusted(-hitRadius, -hitRadius, hitRadius, hitRadius);
+        if (hitZone.contains(pos)) {
+            return h;
+        }
+    }
+    return CanvasHandle::None;
+}
+
+Qt::CursorShape CanvasScene::cursorForHandle(CanvasHandle h) {
+    switch (h) {
+    case CanvasHandle::Top:
+    case CanvasHandle::Bottom:
+        return Qt::SizeVerCursor;
+    case CanvasHandle::Left:
+    case CanvasHandle::Right:
+        return Qt::SizeHorCursor;
+    case CanvasHandle::TopLeft:
+    case CanvasHandle::BottomRight:
+        return Qt::SizeFDiagCursor;
+    case CanvasHandle::TopRight:
+    case CanvasHandle::BottomLeft:
+        return Qt::SizeBDiagCursor;
+    default:
+        return Qt::ArrowCursor;
+    }
+}
+
+void CanvasScene::resizeCanvas(const QRectF& newBounds, const QString& undoText) {
+    if (!m_basePixmapItem) return;
+    QPixmap oldPix = m_basePixmapItem->pixmap();
+    if (oldPix.isNull()) return;
+
+    int newW = qMax(20, qRound(newBounds.width()));
+    int newH = qMax(20, qRound(newBounds.height()));
+    int shiftX = (newBounds.x() < 0) ? qRound(-newBounds.x()) : 0;
+    int shiftY = (newBounds.y() < 0) ? qRound(-newBounds.y()) : 0;
+
+    if (newW == oldPix.width() && newH == oldPix.height() && shiftX == 0 && shiftY == 0) {
+        return;
+    }
+
+    QPixmap newPix(newW, newH);
+    newPix.fill(Qt::transparent);
+
+    QPainter p(&newPix);
+    p.setRenderHint(QPainter::SmoothPixmapTransform, true);
+    p.drawPixmap(shiftX, shiftY, oldPix);
+    p.end();
+
+    QPointF itemOffset(shiftX, shiftY);
+    shiftAnnotationItems(itemOffset);
+    setBasePixmap(newPix);
+
+    m_undoStack.push(new ResizeCanvasCommand(this, oldPix, newPix, itemOffset, undoText));
+}
+
+void CanvasScene::shiftAnnotationItems(const QPointF& offset) {
+    if (offset.isNull()) return;
+    for (auto* item : items()) {
+        if (!isSystemItem(item)) {
+            item->setPos(item->pos() + offset);
+            if (auto* blur = dynamic_cast<BlurItem*>(item)) {
+                blur->updateEffect(m_basePixmapItem->pixmap());
+            }
+        }
+    }
 }
 
 void CanvasScene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
@@ -281,10 +507,29 @@ void CanvasScene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
 
     m_startPoint = event->scenePos();
 
+    // 1. Check if an edge resize handle was clicked
+    CanvasHandle h = handleAt(m_startPoint);
+    if (h != CanvasHandle::None) {
+        m_activeHandle = h;
+        m_isResizingCanvas = true;
+        m_resizeOriginalRect = m_basePixmapItem->pixmap().rect();
+        m_canvasResizeGuideItem->setRect(m_resizeOriginalRect);
+        m_canvasResizeGuideItem->setVisible(true);
+        if (m_canvasFrameItem) m_canvasFrameItem->update();
+        event->accept();
+        return;
+    }
+
+    // 2. Pan tool: CanvasView handles viewport panning
+    if (m_currentTool == ToolType::Pan) {
+        event->accept();
+        return;
+    }
+
     if (m_currentTool == ToolType::Select) {
         // Check if an annotation item was clicked
         QGraphicsItem* clicked = itemAt(m_startPoint, QTransform());
-        if (clicked && clicked != m_basePixmapItem && clicked != m_areaSelectionRectItem) {
+        if (clicked && !isSystemItem(clicked)) {
             clearAreaSelection();
             QGraphicsScene::mousePressEvent(event);
             return;
@@ -307,7 +552,7 @@ void CanvasScene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
 
         // 1. If clicked an existing vector shape or text item, fill it
         QGraphicsItem* clicked = itemAt(m_startPoint, QTransform());
-        if (clicked && clicked != m_basePixmapItem && clicked != m_areaSelectionRectItem) {
+        if (clicked && !isSystemItem(clicked)) {
             if (auto* shape = dynamic_cast<ShapeItem*>(clicked)) {
                 shape->setFillColor(fillCol);
                 emit sceneModified();
@@ -425,7 +670,7 @@ void CanvasScene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
 
     if (m_currentTool == ToolType::Text) {
         QGraphicsItem* clicked = itemAt(m_startPoint, QTransform());
-        if (clicked && clicked != m_basePixmapItem && clicked != m_areaSelectionRectItem) {
+        if (clicked && !isSystemItem(clicked)) {
             if (auto* txt = dynamic_cast<TextItem*>(clicked)) {
                 clearSelection();
                 txt->setSelected(true);
@@ -445,6 +690,78 @@ void CanvasScene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
 }
 
 void CanvasScene::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
+    if (m_isResizingCanvas) {
+        QPointF pt = event->scenePos();
+        QRectF orig = m_resizeOriginalRect;
+        qreal minX = orig.left();
+        qreal maxX = orig.right();
+        qreal minY = orig.top();
+        qreal maxY = orig.bottom();
+
+        switch (m_activeHandle) {
+        case CanvasHandle::Right:
+            maxX = qMax(minX + 20.0, pt.x());
+            break;
+        case CanvasHandle::Bottom:
+            maxY = qMax(minY + 20.0, pt.y());
+            break;
+        case CanvasHandle::BottomRight:
+            maxX = qMax(minX + 20.0, pt.x());
+            maxY = qMax(minY + 20.0, pt.y());
+            break;
+        case CanvasHandle::Left:
+            minX = qMin(maxX - 20.0, pt.x());
+            break;
+        case CanvasHandle::Top:
+            minY = qMin(maxY - 20.0, pt.y());
+            break;
+        case CanvasHandle::TopLeft:
+            minX = qMin(maxX - 20.0, pt.x());
+            minY = qMin(maxY - 20.0, pt.y());
+            break;
+        case CanvasHandle::TopRight:
+            minY = qMin(maxY - 20.0, pt.y());
+            maxX = qMax(minX + 20.0, pt.x());
+            break;
+        case CanvasHandle::BottomLeft:
+            minX = qMin(maxX - 20.0, pt.x());
+            maxY = qMax(minY + 20.0, pt.y());
+            break;
+        default:
+            break;
+        }
+
+        QRectF guideRect(minX, minY, maxX - minX, maxY - minY);
+        m_canvasResizeGuideItem->setRect(guideRect);
+        event->accept();
+        return;
+    }
+
+    // Handle hover tracking
+    if (!m_isDrawing && !m_isSelectingArea) {
+        CanvasHandle h = handleAt(event->scenePos());
+        if (h != m_hoveredHandle) {
+            m_hoveredHandle = h;
+            if (m_canvasFrameItem) m_canvasFrameItem->update();
+        }
+        if (h != CanvasHandle::None) {
+            for (auto* view : views()) {
+                view->setCursor(cursorForHandle(h));
+            }
+        } else {
+            for (auto* view : views()) {
+                if (auto* cv = qobject_cast<CanvasView*>(view)) {
+                    cv->updateToolCursor();
+                }
+            }
+        }
+    }
+
+    if (m_currentTool == ToolType::Pan) {
+        event->accept();
+        return;
+    }
+
     if (m_isSelectingArea) {
         m_selectedArea = QRectF(m_startPoint, event->scenePos()).normalized();
         m_areaSelectionRectItem->setRect(m_selectedArea);
@@ -462,6 +779,31 @@ void CanvasScene::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
 
 void CanvasScene::mouseReleaseEvent(QGraphicsSceneMouseEvent* event) {
     if (event->button() == Qt::LeftButton) {
+        if (m_isResizingCanvas) {
+            m_isResizingCanvas = false;
+            QRectF guideRect = m_canvasResizeGuideItem->rect();
+            m_canvasResizeGuideItem->setVisible(false);
+            m_activeHandle = CanvasHandle::None;
+            if (m_canvasFrameItem) m_canvasFrameItem->update();
+
+            if (guideRect.isValid() && (guideRect != m_resizeOriginalRect)) {
+                resizeCanvas(guideRect);
+            }
+
+            for (auto* view : views()) {
+                if (auto* cv = qobject_cast<CanvasView*>(view)) {
+                    cv->updateToolCursor();
+                }
+            }
+            event->accept();
+            return;
+        }
+
+        if (m_currentTool == ToolType::Pan) {
+            event->accept();
+            return;
+        }
+
         if (m_isSelectingArea) {
             m_isSelectingArea = false;
             m_selectedArea = QRectF(m_startPoint, event->scenePos()).normalized();
@@ -531,7 +873,7 @@ void CanvasScene::keyPressEvent(QKeyEvent* event) {
     if (event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace) {
         auto selItems = selectedItems();
         for (auto* item : selItems) {
-            if (item != m_basePixmapItem && item != m_areaSelectionRectItem) {
+            if (!isSystemItem(item)) {
                 removeItem(item);
                 emit sceneModified();
             }
