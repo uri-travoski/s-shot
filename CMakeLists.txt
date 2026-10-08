@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(s-shot
-    VERSION 1.28.0
+    VERSION 1.29.0
     DESCRIPTION "Lightweight Screenshot & Annotation Tool for Linux"
     LANGUAGES CXX
 )
@@ -124,17 +124,28 @@ install(TARGETS s-shot
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
-install(FILES resources/s-shot.desktop
+install(FILES
+    resources/s-shot.desktop
+    resources/io.github.uri_travoski.s-shot.desktop
     DESTINATION ${CMAKE_INSTALL_DATADIR}/applications
 )
 
-install(FILES resources/icons/s-shot.svg
+install(FILES
+    resources/io.github.uri_travoski.s-shot.metainfo.xml
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/metainfo
+)
+
+install(FILES
+    resources/icons/s-shot.svg
+    resources/icons/io.github.uri_travoski.s-shot.svg
     DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps
 )
 
 foreach(SZ 16x16 22x22 24x24 32x32 48x48 64x64 128x128 256x256)
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/resources/icons/hicolor/${SZ}/apps/s-shot.png")
-        install(FILES resources/icons/hicolor/${SZ}/apps/s-shot.png
+        install(FILES
+            resources/icons/hicolor/${SZ}/apps/s-shot.png
+            resources/icons/hicolor/${SZ}/apps/io.github.uri_travoski.s-shot.png
             DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/${SZ}/apps
         )
     endif()

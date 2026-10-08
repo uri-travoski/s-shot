@@ -304,6 +304,13 @@ void TestEditorTools::testCanvasSceneAreaSelectionAndCrop() {
     QVERIFY(scene.hasAreaSelection());
     QCOMPARE(scene.selectedArea().toRect(), QRect(10, 10, 100, 100));
 
+    // Test deleteSelectedArea() fills deleted region with clean white background
+    scene.setSelectedArea(QRectF(20, 20, 50, 50));
+    scene.deleteSelectedArea();
+    QCOMPARE(scene.basePixmap().toImage().pixelColor(30, 30), QColor(255, 255, 255));
+    QCOMPARE(scene.basePixmap().toImage().pixelColor(5, 5), QColor(0, 0, 255));
+
+    scene.setSelectedArea(QRectF(10, 10, 100, 100));
     scene.cropToSelectedArea();
     QCOMPARE(scene.basePixmap().size(), QSize(100, 100));
     QVERIFY(!scene.hasAreaSelection());
@@ -1223,6 +1230,9 @@ void TestEditorTools::testTextItemMultipleBlocksSelect() {
     // Click on pt1 or pt2 again
     QTest::mouseClick(view->viewport(), Qt::LeftButton, Qt::NoModifier, pt2);
     QTest::qWait(50);
+
+    // Save visual preview of text without borders
+    win.grab().save("/home/owner/distrobox-homes/devbox/.gemini/antigravity/brain/e77fcd3f-2a52-4f22-843d-d82ecd75f998/text_no_border_preview.png");
 }
 
 void TestEditorTools::testCrashHandlerAndLogging() {
@@ -1324,6 +1334,8 @@ void TestEditorTools::testPanToolAndCanvasResizeHandles() {
     scene->resizeCanvas(QRectF(0, 0, 950, 700), "Expand Canvas Bottom-Right");
     QCOMPARE(scene->basePixmap().size(), QSize(950, 700));
     QCOMPARE(scene->sceneRect(), QRectF(0, 0, 950, 700));
+    // Newly extended canvas area should have white background
+    QCOMPARE(scene->basePixmap().toImage().pixelColor(900, 650), QColor(255, 255, 255));
 
     // Undo expansion
     QVERIFY(scene->undoStack()->canUndo());

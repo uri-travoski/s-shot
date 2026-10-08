@@ -1,4 +1,4 @@
-app-id: org.sshot.s-shot
+app-id: io.github.uri_travoski.s-shot
 runtime: org.kde.Platform
 runtime-version: '6.8'
 sdk: org.kde.Sdk
@@ -10,7 +10,8 @@ finish-args:
   - --socket=wayland
   - --filesystem=xdg-pictures
   - --talk-name=org.kde.StatusNotifierWatcher
-  - --own-name=org.kde.StatusNotifierItem-1-1
+  - --own-name=org.kde.StatusNotifierItem-1-*
+  - --talk-name=org.freedesktop.Notifications
 
 modules:
   - name: s-shot
@@ -19,5 +20,6 @@ modules:
     config-opts:
       - -DCMAKE_BUILD_TYPE=Release
     sources:
-      - type: dir
-        path: ../..
+      - type: archive
+        url: https://github.com/uri-travoski/s-shot/archive/refs/tags/v1.28.tar.gz
+        sha256: 70814a6944e872d6e1ce65a649cf764a1e9600c37a9bff2caf9b96912aa490c1

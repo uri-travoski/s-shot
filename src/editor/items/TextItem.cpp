@@ -1,6 +1,8 @@
 #include "TextItem.h"
 #include <QGraphicsScene>
 #include <QTextCursor>
+#include <QStyleOptionGraphicsItem>
+#include <QStyle>
 
 TextItem::TextItem(const QString& text, const QPointF& pos)
     : QGraphicsTextItem()
@@ -65,29 +67,25 @@ QRectF TextItem::boundingRect() const {
 }
 
 void TextItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget) {
-    QRectF r = boundingRect().adjusted(2, 2, -2, -2);
+    QRectF r = boundingRect().adjusted(1, 1, -1, -1);
 
-    // 1. Draw textbox background
+    // 1. Draw textbox background if explicitly configured (without any border pen)
     if (m_fillColor.isValid() && m_fillColor != Qt::transparent && m_fillColor.alpha() > 0) {
         painter->save();
         painter->setRenderHint(QPainter::Antialiasing, true);
         painter->setBrush(m_fillColor);
-        painter->setPen(QPen(m_strokeColor, 1));
-        painter->drawRoundedRect(r, 4, 4);
-        painter->restore();
-    } else if (m_isEditing) {
-        // While actively typing in a transparent textbox, show a subtle dashed guide
-        painter->save();
-        painter->setBrush(Qt::NoBrush);
-        painter->setPen(QPen(QColor(48, 229, 0, 200), 1, Qt::DashLine));
+        painter->setPen(Qt::NoPen);
         painter->drawRoundedRect(r, 4, 4);
         painter->restore();
     }
 
-    // 2. Draw text content and cursor
-    QGraphicsTextItem::paint(painter, option, widget);
+    // 2. Draw text content and cursor (suppress Qt's default white focus and selection border)
+    QStyleOptionGraphicsItem opt = *option;
+    opt.state &= ~QStyle::State_Selected;
+    opt.state &= ~QStyle::State_HasFocus;
+    QGraphicsTextItem::paint(painter, &opt, widget);
 
-    // 3. Selection border in Select tool
+    // 3. Selection outline only when explicitly selected with the Select tool (not while editing or viewing)
     if (isSelected() && !m_isEditing) {
         painter->save();
         painter->setBrush(Qt::NoBrush);

@@ -332,12 +332,11 @@ void CanvasScene::moveSelectedArea() {
 
     QPixmap patch = m_basePixmapItem->pixmap().copy(cropRect);
 
-    // Clear the selected area from base pixmap
+    // Clear the selected area from base pixmap with clean white background
     QPixmap oldPix = m_basePixmapItem->pixmap();
     QPixmap newPix = oldPix;
     QPainter p(&newPix);
-    p.setCompositionMode(QPainter::CompositionMode_Clear);
-    p.fillRect(cropRect, Qt::transparent);
+    p.fillRect(cropRect, Qt::white);
     p.end();
 
     QGraphicsPixmapItem* floatingPatch = new QGraphicsPixmapItem(patch);
@@ -363,8 +362,7 @@ void CanvasScene::deleteSelectedArea() {
     QPixmap newPix = oldPix;
 
     QPainter p(&newPix);
-    p.setCompositionMode(QPainter::CompositionMode_Clear);
-    p.fillRect(m_selectedArea.toRect(), Qt::transparent);
+    p.fillRect(m_selectedArea.toRect().intersected(oldPix.rect()), Qt::white);
     p.end();
 
     m_undoStack.push(new ModifyPixmapCommand(this, oldPix, newPix, "Delete Area"));
@@ -473,7 +471,7 @@ void CanvasScene::resizeCanvas(const QRectF& newBounds, const QString& undoText)
     }
 
     QPixmap newPix(newW, newH);
-    newPix.fill(Qt::transparent);
+    newPix.fill(Qt::white);
 
     QPainter p(&newPix);
     p.setRenderHint(QPainter::SmoothPixmapTransform, true);
@@ -1073,6 +1071,31 @@ void CanvasScene::modifyBadgeNumber(BadgeItem* badge, int newNumber) {
 void CanvasScene::contextMenuEvent(QGraphicsSceneContextMenuEvent* event) {
     QGraphicsScene::contextMenuEvent(event);
     if (event->isAccepted()) {
+        return;
+    }
+
+    if (m_currentTool == ToolType::Select && hasAreaSelection()) {
+        QMenu menu;
+        QAction* actCopy = menu.addAction(tr("Copy"));
+        QAction* actCut = menu.addAction(tr("Cut"));
+        QAction* actCrop = menu.addAction(tr("Crop"));
+        menu.addSeparator();
+        QAction* actDel = menu.addAction(tr("Delete Area"));
+
+        QAction* chosen = menu.exec(event->screenPos());
+        if (chosen == actCopy) {
+            copySelectedArea();
+            event->accept();
+        } else if (chosen == actCut) {
+            cutSelectedArea();
+            event->accept();
+        } else if (chosen == actCrop) {
+            cropToSelectedArea();
+            event->accept();
+        } else if (chosen == actDel) {
+            deleteSelectedArea();
+            event->accept();
+        }
         return;
     }
 
