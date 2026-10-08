@@ -13,6 +13,7 @@
 #include "items/BadgeItem.h"
 #include "items/TextItem.h"
 #include "items/BlurItem.h"
+#include "items/PixmapItem.h"
 
 class CanvasScene : public QGraphicsScene {
     Q_OBJECT
@@ -61,6 +62,7 @@ public:
     void deleteSelectedArea();
     void cropToArea(const QRectF& rect);
     void cropToSelectedArea();
+    void pasteImage(const QPixmap& pix, const QPointF& pos = QPointF());
 
     // Canvas edge resize handles
     enum class CanvasHandle {

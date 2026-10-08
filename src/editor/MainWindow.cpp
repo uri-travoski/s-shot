@@ -208,6 +208,9 @@ void MainWindow::setupMenus() {
     QAction* actPaste = editMenu->addAction(IconManager::getIcon("paste"), tr("&Paste"), QKeySequence::Paste, this, &MainWindow::pasteFromClipboard);
     registerAct(actPaste, "paste");
 
+    QAction* actPasteNew = editMenu->addAction(IconManager::getIcon("new"), tr("Paste as &New Image"), QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V), this, &MainWindow::pasteAsNewImage);
+    registerAct(actPasteNew, "new");
+
     editMenu->addSeparator();
 
     QAction* actResetBadge = editMenu->addAction(IconManager::getIcon("badge"), tr("Reset &Badge Numbering to 1"), this, &MainWindow::onResetBadgeCounter);
@@ -293,6 +296,9 @@ void MainWindow::setupToolbars() {
 
     QAction* tbCopy = m_mainToolBar->addAction(IconManager::getIcon("copy"), tr("Copy"), this, &MainWindow::copyActiveImageToClipboard);
     registerAct(tbCopy, "copy");
+
+    QAction* tbPaste = m_mainToolBar->addAction(IconManager::getIcon("paste"), tr("Paste"), this, &MainWindow::pasteFromClipboard);
+    registerAct(tbPaste, "paste");
 
     m_mainToolBar->addSeparator();
 
@@ -551,10 +557,32 @@ void MainWindow::openImage(const QString& filePath) {
 }
 
 void MainWindow::pasteFromClipboard() {
-    const QClipboard* cb = QGuiApplication::clipboard();
-    QPixmap pix = cb->pixmap();
+    QPixmap pix = ClipboardHelper::getClipboardImage();
+    if (pix.isNull()) {
+        statusBar()->showMessage(tr("No image in clipboard to paste"), 2000);
+        return;
+    }
+
+    CanvasScene* scene = currentScene();
+    if (scene) {
+        scene->pasteImage(pix);
+        if (m_actSelect) {
+            m_actSelect->setChecked(true);
+            onToolTriggered(m_actSelect);
+        }
+        statusBar()->showMessage(tr("Pasted image onto canvas (%1 × %2 px)").arg(pix.width()).arg(pix.height()), 3000);
+    } else {
+        addImageTab(pix, tr("Pasted Image"));
+    }
+}
+
+void MainWindow::pasteAsNewImage() {
+    QPixmap pix = ClipboardHelper::getClipboardImage();
     if (!pix.isNull()) {
         addImageTab(pix, tr("Pasted Image"));
+        statusBar()->showMessage(tr("Opened pasted image in new tab"), 2000);
+    } else {
+        statusBar()->showMessage(tr("No image in clipboard to paste"), 2000);
     }
 }
 

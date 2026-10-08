@@ -72,6 +72,7 @@ private slots:
     void testTextItemMultipleBlocksSelect();
     void testCrashHandlerAndLogging();
     void testPanToolAndCanvasResizeHandles();
+    void testPasteImageOntoExistingCanvas();
 };
 
 void TestEditorTools::initTestCase() {
@@ -1410,6 +1411,106 @@ void TestEditorTools::testPanToolAndCanvasResizeHandles() {
 
     QCOMPARE(testScene.activeHandle(), CanvasScene::CanvasHandle::None);
     QCOMPARE(testScene.basePixmap().width(), 450);
+}
+
+void TestEditorTools::testPasteImageOntoExistingCanvas() {
+    MainWindow win;
+    win.show();
+    (void)QTest::qWaitForWindowExposed(&win);
+
+    QTabWidget* tabs = win.findChild<QTabWidget*>();
+    QVERIFY(tabs != nullptr);
+
+    // 1. Initially create a base image tab
+    QPixmap basePix(600, 400);
+    basePix.fill(QColor(0, 0, 255)); // Blue canvas
+    win.addImageTab(basePix, "BaseScreenshot.png");
+    QCOMPARE(tabs->count(), 1);
+
+    CanvasScene* scene = win.currentScene();
+    QVERIFY(scene != nullptr);
+
+    // 2. Prepare a 100x100 green image in clipboard
+    QPixmap clipPix(100, 100);
+    clipPix.fill(QColor(0, 255, 0)); // Green pasted item
+    QVERIFY(ClipboardHelper::copyImage(clipPix));
+
+    // 3. Paste from clipboard onto existing image
+    win.pasteFromClipboard();
+    QTest::qWait(50);
+
+    // Save visual preview of pasted image directly on the open canvas
+    win.grab().save("/home/owner/distrobox-homes/devbox/.gemini/antigravity/brain/e77fcd3f-2a52-4f22-843d-d82ecd75f998/paste_on_canvas_preview.png");
+
+    // Verify it pasted ONTO existing image and did NOT create a new tab!
+    QCOMPARE(tabs->count(), 1);
+
+    // Verify scene contains a PixmapItem
+    PixmapItem* pastedItem = nullptr;
+    for (auto* item : scene->items()) {
+        if (auto* pi = dynamic_cast<PixmapItem*>(item)) {
+            pastedItem = pi;
+            break;
+        }
+    }
+    QVERIFY(pastedItem != nullptr);
+    QCOMPARE(pastedItem->pixmap().size(), QSize(100, 100));
+    QVERIFY(pastedItem->isSelected());
+    QCOMPARE(scene->currentTool(), ToolType::Select);
+
+    // 4. Verify rendered pixmap contains the pasted image
+    QPixmap rendered = scene->renderToPixmap();
+    QCOMPARE(rendered.size(), QSize(600, 400));
+    QPoint itemTopLeft = pastedItem->pos().toPoint();
+    QCOMPARE(rendered.toImage().pixelColor(itemTopLeft.x() + 50, itemTopLeft.y() + 50), QColor(0, 255, 0));
+    QCOMPARE(rendered.toImage().pixelColor(10, 10), QColor(0, 0, 255));
+
+    // 5. Test Undo removes the pasted item
+    QVERIFY(scene->undoStack()->canUndo());
+    scene->undoStack()->undo();
+    QTest::qWait(20);
+    bool foundAfterUndo = false;
+    for (auto* item : scene->items()) {
+        if (dynamic_cast<PixmapItem*>(item)) {
+            foundAfterUndo = true;
+            break;
+        }
+    }
+    QVERIFY(!foundAfterUndo);
+
+    // 6. Test Redo restores the pasted item
+    QVERIFY(scene->undoStack()->canRedo());
+    scene->undoStack()->redo();
+    QTest::qWait(20);
+    bool foundAfterRedo = false;
+    for (auto* item : scene->items()) {
+        if (dynamic_cast<PixmapItem*>(item)) {
+            foundAfterRedo = true;
+            break;
+        }
+    }
+    QVERIFY(foundAfterRedo);
+
+    // 7. Test Paste into an Area Selection
+    scene->setSelectedArea(QRectF(30, 40, 150, 150));
+    win.pasteFromClipboard();
+    QTest::qWait(20);
+    QCOMPARE(tabs->count(), 1);
+    bool foundAtArea = false;
+    for (auto* item : scene->items()) {
+        if (auto* pi = dynamic_cast<PixmapItem*>(item)) {
+            if (pi->pos() == QPointF(30, 40)) {
+                foundAtArea = true;
+                break;
+            }
+        }
+    }
+    QVERIFY(foundAtArea);
+
+    // 8. Test pasteAsNewImage explicitly creates a new tab
+    win.pasteAsNewImage();
+    QTest::qWait(50);
+    QCOMPARE(tabs->count(), 2);
 }
 
 int main(int argc, char** argv) {

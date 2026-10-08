@@ -38,6 +38,7 @@ set(SOURCES
     src/editor/items/BadgeItem.cpp
     src/editor/items/TextItem.cpp
     src/editor/items/BlurItem.cpp
+    src/editor/items/PixmapItem.cpp
     src/dialogs/SettingsDialog.cpp
     src/dialogs/AboutDialog.cpp
     resources/resources.qrc
@@ -92,6 +93,7 @@ add_executable(test_editor_tools
     src/editor/items/BadgeItem.cpp
     src/editor/items/TextItem.cpp
     src/editor/items/BlurItem.cpp
+    src/editor/items/PixmapItem.cpp
     src/dialogs/SettingsDialog.cpp
     src/dialogs/AboutDialog.cpp
     resources/resources.qrc

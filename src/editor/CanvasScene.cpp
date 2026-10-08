@@ -66,6 +66,35 @@ private:
     bool m_inScene = false;
 };
 
+class RemoveItemCommand : public QUndoCommand {
+public:
+    RemoveItemCommand(QGraphicsScene* scene, QGraphicsItem* item, QUndoCommand* parent = nullptr)
+        : QUndoCommand(parent), m_scene(scene), m_item(item), m_inScene(true) {
+        setText("Delete Item");
+    }
+    ~RemoveItemCommand() {
+        if (!m_inScene && m_item) {
+            delete m_item;
+        }
+    }
+    void undo() override {
+        if (!m_inScene && m_item) {
+            m_scene->addItem(m_item);
+            m_inScene = true;
+        }
+    }
+    void redo() override {
+        if (m_inScene && m_item) {
+            m_scene->removeItem(m_item);
+            m_inScene = false;
+        }
+    }
+private:
+    QGraphicsScene* m_scene;
+    QGraphicsItem* m_item;
+    bool m_inScene = true;
+};
+
 class ModifyPixmapCommand : public QUndoCommand {
 public:
     ModifyPixmapCommand(CanvasScene* scene, const QPixmap& oldPix, const QPixmap& newPix, const QString& text, QUndoCommand* parent = nullptr)
@@ -339,11 +368,8 @@ void CanvasScene::moveSelectedArea() {
     p.fillRect(cropRect, Qt::white);
     p.end();
 
-    QGraphicsPixmapItem* floatingPatch = new QGraphicsPixmapItem(patch);
-    floatingPatch->setFlags(QGraphicsItem::ItemIsMovable | QGraphicsItem::ItemIsSelectable | QGraphicsItem::ItemSendsGeometryChanges);
-    floatingPatch->setCursor(Qt::SizeAllCursor);
+    PixmapItem* floatingPatch = new PixmapItem(patch);
     floatingPatch->setPos(cropRect.topLeft());
-    floatingPatch->setZValue(1.0);
 
     m_undoStack.beginMacro("Move Area");
     m_undoStack.push(new ModifyPixmapCommand(this, oldPix, newPix, "Clear Moved Area"));
@@ -391,6 +417,50 @@ void CanvasScene::cropToArea(const QRectF& rect) {
 
     m_undoStack.push(new ModifyPixmapCommand(this, oldPix, newPix, "Crop Image"));
     clearAreaSelection();
+}
+
+void CanvasScene::pasteImage(const QPixmap& pix, const QPointF& pos) {
+    if (pix.isNull()) return;
+
+    clearSelection();
+
+    QPointF pastePos;
+    if (!pos.isNull()) {
+        pastePos = pos;
+    } else if (hasAreaSelection()) {
+        pastePos = m_selectedArea.topLeft();
+    } else if (!views().isEmpty() && views().first()->viewport()) {
+        QGraphicsView* v = views().first();
+        QPoint viewportCenter = v->viewport()->rect().center();
+        QPointF sceneCenter = v->mapToScene(viewportCenter);
+        pastePos = sceneCenter - QPointF(pix.width() / 2.0, pix.height() / 2.0);
+    } else {
+        pastePos = QPointF(
+            qMax(0.0, (sceneRect().width() - pix.width()) / 2.0),
+            qMax(0.0, (sceneRect().height() - pix.height()) / 2.0)
+        );
+    }
+
+    // Expand canvas if pasted image extends outside the current sceneRect
+    qreal newW = qMax(sceneRect().width(), pastePos.x() + pix.width());
+    qreal newH = qMax(sceneRect().height(), pastePos.y() + pix.height());
+    if (newW > sceneRect().width() || newH > sceneRect().height()) {
+        resizeCanvas(QRectF(0, 0, newW, newH), tr("Expand Canvas for Pasted Image"));
+    }
+
+    if (pastePos.x() < 0) pastePos.setX(0);
+    if (pastePos.y() < 0) pastePos.setY(0);
+
+    clearAreaSelection();
+
+    PixmapItem* item = new PixmapItem(pix);
+    item->setPos(pastePos);
+    item->setSelected(true);
+
+    m_undoStack.push(new AddItemCommand(this, item, false));
+
+    setCurrentTool(ToolType::Select);
+    emit sceneModified();
 }
 
 QRectF CanvasScene::handleRect(CanvasHandle h) const {
@@ -867,14 +937,63 @@ void CanvasScene::keyPressEvent(QKeyEvent* event) {
         }
     }
 
-    // Delete selected annotation items
+    // Paste image from clipboard
+    if (event->matches(QKeySequence::Paste)) {
+        QPixmap clipPix = ClipboardHelper::getClipboardImage();
+        if (!clipPix.isNull()) {
+            pasteImage(clipPix);
+            event->accept();
+            return;
+        }
+    }
+
+    // Copy single selected PixmapItem
+    if (event->matches(QKeySequence::Copy)) {
+        auto sel = selectedItems();
+        if (sel.count() == 1) {
+            if (auto* pm = dynamic_cast<PixmapItem*>(sel.first())) {
+                ClipboardHelper::copyImage(pm->pixmap());
+                event->accept();
+                return;
+            }
+        }
+    }
+
+    // Precision nudge selected annotation / pixmap items with Arrow keys
+    if (!selectedItems().isEmpty() && !hasAreaSelection()) {
+        qreal step = (event->modifiers() & Qt::ShiftModifier) ? 10.0 : 1.0;
+        QPointF delta;
+        if (event->key() == Qt::Key_Left) delta = QPointF(-step, 0);
+        else if (event->key() == Qt::Key_Right) delta = QPointF(step, 0);
+        else if (event->key() == Qt::Key_Up) delta = QPointF(0, -step);
+        else if (event->key() == Qt::Key_Down) delta = QPointF(0, step);
+
+        if (!delta.isNull()) {
+            for (auto* item : selectedItems()) {
+                if (!isSystemItem(item)) {
+                    item->setPos(item->pos() + delta);
+                }
+            }
+            emit sceneModified();
+            event->accept();
+            return;
+        }
+    }
+
+    // Delete selected annotation items with Undo support
     if (event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace) {
         auto selItems = selectedItems();
-        for (auto* item : selItems) {
-            if (!isSystemItem(item)) {
-                removeItem(item);
-                emit sceneModified();
+        if (!selItems.isEmpty()) {
+            m_undoStack.beginMacro("Delete Items");
+            for (auto* item : selItems) {
+                if (!isSystemItem(item)) {
+                    m_undoStack.push(new RemoveItemCommand(this, item));
+                }
             }
+            m_undoStack.endMacro();
+            emit sceneModified();
+            event->accept();
+            return;
         }
     }
 
@@ -1074,11 +1193,17 @@ void CanvasScene::contextMenuEvent(QGraphicsSceneContextMenuEvent* event) {
         return;
     }
 
+    QPixmap clipPix = ClipboardHelper::getClipboardImage();
+
     if (m_currentTool == ToolType::Select && hasAreaSelection()) {
         QMenu menu;
         QAction* actCopy = menu.addAction(tr("Copy"));
         QAction* actCut = menu.addAction(tr("Cut"));
         QAction* actCrop = menu.addAction(tr("Crop"));
+        QAction* actPaste = nullptr;
+        if (!clipPix.isNull()) {
+            actPaste = menu.addAction(tr("Paste"));
+        }
         menu.addSeparator();
         QAction* actDel = menu.addAction(tr("Delete Area"));
 
@@ -1095,8 +1220,62 @@ void CanvasScene::contextMenuEvent(QGraphicsSceneContextMenuEvent* event) {
         } else if (chosen == actDel) {
             deleteSelectedArea();
             event->accept();
+        } else if (actPaste && chosen == actPaste) {
+            pasteImage(clipPix, m_selectedArea.topLeft());
+            event->accept();
         }
         return;
+    }
+
+    // Check if an existing annotation/pixmap item was clicked
+    QGraphicsItem* clicked = itemAt(event->scenePos(), QTransform());
+    if (clicked && !isSystemItem(clicked)) {
+        QMenu menu;
+        QAction* actCopy = nullptr;
+        if (auto* pm = dynamic_cast<PixmapItem*>(clicked)) {
+            actCopy = menu.addAction(tr("Copy"));
+        }
+        QAction* actDel = menu.addAction(tr("Delete"));
+        menu.addSeparator();
+        QAction* actFront = menu.addAction(tr("Bring to Front"));
+        QAction* actBack = menu.addAction(tr("Send to Back"));
+
+        QAction* chosen = menu.exec(event->screenPos());
+        if (actCopy && chosen == actCopy) {
+            ClipboardHelper::copyImage(static_cast<PixmapItem*>(clicked)->pixmap());
+            event->accept();
+            return;
+        } else if (chosen == actDel) {
+            m_undoStack.push(new RemoveItemCommand(this, clicked));
+            emit sceneModified();
+            event->accept();
+            return;
+        } else if (chosen == actFront) {
+            qreal maxZ = 2.0;
+            for (auto* it : items()) {
+                if (!isSystemItem(it) && it->zValue() > maxZ) maxZ = it->zValue();
+            }
+            clicked->setZValue(maxZ + 1.0);
+            emit sceneModified();
+            event->accept();
+            return;
+        } else if (chosen == actBack) {
+            clicked->setZValue(1.0);
+            emit sceneModified();
+            event->accept();
+            return;
+        }
+    }
+
+    if (!clipPix.isNull()) {
+        QMenu menu;
+        QAction* actPaste = menu.addAction(tr("Paste Image Here"));
+        QAction* chosen = menu.exec(event->screenPos());
+        if (chosen == actPaste) {
+            pasteImage(clipPix, event->scenePos());
+            event->accept();
+            return;
+        }
     }
 
     if (m_currentTool == ToolType::Badge) {

@@ -31,6 +31,7 @@ public:
 public slots:
     void openFileDialog();
     void pasteFromClipboard();
+    void pasteAsNewImage();
     void saveActiveTab();
     void saveActiveTabAs();
     void copyActiveImageToClipboard();
