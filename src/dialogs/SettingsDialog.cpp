@@ -121,13 +121,11 @@ SettingsDialog::SettingsDialog(QWidget* parent)
 
     m_hotkeyFullscreenEdit = new QLineEdit(hotkeysTab);
     m_hotkeyRegionEdit = new QLineEdit(hotkeysTab);
-    m_hotkeyScrollingEdit = new QLineEdit(hotkeysTab);
     m_hotkeyColorPickerEdit = new QLineEdit(hotkeysTab);
     m_hotkeyEditorEdit = new QLineEdit(hotkeysTab);
 
     hkForm->addRow(tr("Capture Fullscreen:"), m_hotkeyFullscreenEdit);
     hkForm->addRow(tr("Capture Selected Region:"), m_hotkeyRegionEdit);
-    hkForm->addRow(tr("Capture Scrolling Window:"), m_hotkeyScrollingEdit);
     hkForm->addRow(tr("Colour Picker:"), m_hotkeyColorPickerEdit);
     hkForm->addRow(tr("Open Editor:"), m_hotkeyEditorEdit);
 
@@ -201,7 +199,6 @@ void SettingsDialog::loadSettings() {
 
     m_hotkeyFullscreenEdit->setText(s.hotkeyFullscreen());
     m_hotkeyRegionEdit->setText(s.hotkeyRegion());
-    m_hotkeyScrollingEdit->setText(s.hotkeyScrolling());
     m_hotkeyColorPickerEdit->setText(s.hotkeyColorPicker());
     m_hotkeyEditorEdit->setText(s.hotkeyEditor());
 
@@ -229,7 +226,6 @@ void SettingsDialog::saveSettings() {
 
     s.setHotkeyFullscreen(m_hotkeyFullscreenEdit->text());
     s.setHotkeyRegion(m_hotkeyRegionEdit->text());
-    s.setHotkeyScrolling(m_hotkeyScrollingEdit->text());
     s.setHotkeyColorPicker(m_hotkeyColorPickerEdit->text());
     s.setHotkeyEditor(m_hotkeyEditorEdit->text());
 

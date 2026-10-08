@@ -105,11 +105,11 @@ private:
     QGraphicsPixmapItem* m_basePixmapItem = nullptr;
     QUndoStack m_undoStack;
 
-    ToolType m_currentTool = ToolType::Select;
+    ToolType m_currentTool = ToolType::Pan;
     QColor m_strokeColor = QColor(255, 30, 30);
     QColor m_fillColor = Qt::transparent;
     int m_strokeWidth = 3;
-    QFont m_font = QFont("Sans", 14, QFont::Bold);
+    QFont m_font = QFont("Sans", 11, QFont::Bold);
     int m_badgeCounter = 1;
     int m_blurLevel = 4;
 

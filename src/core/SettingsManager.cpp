@@ -36,7 +36,6 @@ void SettingsManager::load() {
 
     m_hotkeyFullscreen = s.value("hotkeyFullscreen", "Ctrl+Shift+Print").toString();
     m_hotkeyRegion = s.value("hotkeyRegion", "Ctrl+Print").toString();
-    m_hotkeyScrolling = s.value("hotkeyScrolling", "Ctrl+Shift+S").toString();
     m_hotkeyColorPicker = s.value("hotkeyColorPicker", "Ctrl+Shift+C").toString();
     m_hotkeyEditor = s.value("hotkeyEditor", "Ctrl+Shift+E").toString();
 
@@ -57,7 +56,6 @@ void SettingsManager::save() {
 
     s.setValue("hotkeyFullscreen", m_hotkeyFullscreen);
     s.setValue("hotkeyRegion", m_hotkeyRegion);
-    s.setValue("hotkeyScrolling", m_hotkeyScrolling);
     s.setValue("hotkeyColorPicker", m_hotkeyColorPicker);
     s.setValue("hotkeyEditor", m_hotkeyEditor);
 

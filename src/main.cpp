@@ -21,7 +21,7 @@ int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
     app.setApplicationName("s-shot");
     app.setApplicationDisplayName("S-Shot");
-    app.setApplicationVersion("1.27");
+    app.setApplicationVersion("1.28");
     app.setOrganizationName("S-Shot");
     app.setWindowIcon(IconManager::getAppIcon());
 
@@ -109,9 +109,6 @@ int main(int argc, char* argv[]) {
             break;
         case HotkeyAction::Region:
             captureMgr.captureRegion();
-            break;
-        case HotkeyAction::Scrolling:
-            captureMgr.captureScrollingWindow();
             break;
         case HotkeyAction::ColorPicker:
             captureMgr.pickColor();

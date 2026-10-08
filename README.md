@@ -16,21 +16,22 @@ It is designed to consume minimal system resources (~7–12 MB private RAM idle 
     2. **Editor**: Opens the annotation editor to paste an image or create a blank canvas.
     3. **Capture Fullscreen**: Grabs the entire virtual display.
     4. **Capture Selected Region**: Interactive snipping overlay with 8x magnifier loupe, crosshair, pixel dimensions, and live color readout.
-    5. **Capture Scrolling Window**: Step-by-step or automated scroll slice capture with vertical auto-stitching.
-    6. **Colour Picker**: Interactive screen loupe displaying real-time RGB and HEX values; clicking copies `#HEX` to clipboard with a desktop notification.
-    7. **Settings**: Configures autostart, save directories, formats, and hotkeys.
-    8. **About**: Shows app details and a live RAM footprint meter.
-    9. **Quit**: Terminates the application.
+    5. **Colour Picker**: Interactive screen loupe displaying real-time RGB and HEX values; clicking copies `#HEX` to clipboard with a desktop notification.
+    6. **Settings**: Configures autostart, save directories, formats, and hotkeys.
+    7. **About**: Shows app details and a live RAM footprint meter.
+    8. **Quit**: Terminates the application.
   - Closing the editor window minimizes to the system tray.
 
 - **Annotation Editor (ksnip-like UI & Multi-Tab Support)**:
   - Multi-tab editing: open and edit multiple screenshots or images simultaneously.
   - Left-hand vertical toolbar containing all annotation tools:
+    - **Pan / Hand Tool**: Smooth click-and-drag viewport panning across large images.
     - **Select Tool**: Select and move vector annotations, **plus area selection** on the screenshot canvas with instant floating action buttons:
       - 📋 **Copy**: Copies the selected area to clipboard.
       - ✂ **Cut**: Copies to clipboard and clears the area on the image.
       - 🗑 **Delete**: Erases the selected area.
       - ⛶ **Crop**: Crops the canvas to the selected area.
+    - **Interactive Canvas Resize Handles**: 8 perimeter handles allowing dragging to expand the canvas from any edge or corner with full Undo/Redo.
     - **Pen**: Smooth freehand drawing.
     - **Highlighter**: Translucent highlighting brush preserving underlying text.
     - **Line**: Straight line tool.
@@ -51,7 +52,7 @@ It is designed to consume minimal system resources (~7–12 MB private RAM idle 
   - **Start with PC**: Automatically creates `~/.config/autostart/s-shot.desktop` to launch minimized in the system tray on login.
   - **Save Location**: Configurable default directory (e.g. `~/Pictures/Screenshots`).
   - **Formats**: PNG, JPG, BMP, WebP.
-  - **Global Hotkeys**: Global shortcuts for Fullscreen, Region, Scrolling, Color Picker, and Editor via X11.
+  - **Global Hotkeys**: Global shortcuts for Fullscreen, Region, Color Picker, and Editor via X11.
 
 ---
 

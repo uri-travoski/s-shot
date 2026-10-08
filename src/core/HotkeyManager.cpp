@@ -169,7 +169,6 @@ void HotkeyManager::updateHotkeys() {
     const auto& s = SettingsManager::instance();
     grabSingleShortcut(m_impl.get(), HotkeyAction::Fullscreen, s.hotkeyFullscreen());
     grabSingleShortcut(m_impl.get(), HotkeyAction::Region, s.hotkeyRegion());
-    grabSingleShortcut(m_impl.get(), HotkeyAction::Scrolling, s.hotkeyScrolling());
     grabSingleShortcut(m_impl.get(), HotkeyAction::ColorPicker, s.hotkeyColorPicker());
     grabSingleShortcut(m_impl.get(), HotkeyAction::Editor, s.hotkeyEditor());
 }

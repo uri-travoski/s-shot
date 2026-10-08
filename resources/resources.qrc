@@ -26,7 +26,6 @@
     <file>icons/zoom_100.svg</file>
     <file>icons/fullscreen.svg</file>
     <file>icons/snip.svg</file>
-    <file>icons/scroll.svg</file>
     <file>icons/picker.svg</file>
     <file>icons/editor.svg</file>
     <file>icons/settings.svg</file>
@@ -63,7 +62,6 @@
     <file>icons/light/s-shot.svg</file>
     <file>icons/light/fullscreen.svg</file>
     <file>icons/light/snip.svg</file>
-    <file>icons/light/scroll.svg</file>
     <file>icons/light/picker.svg</file>
     <file>icons/light/editor.svg</file>
     <file>icons/light/settings.svg</file>

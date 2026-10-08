@@ -41,7 +41,6 @@ public slots:
     // Capture slots
     void onCaptureFullscreen();
     void onCaptureRegion();
-    void onCaptureScrolling();
     void onColorPicker();
 
     // Tool selection slots
@@ -150,7 +149,7 @@ private:
 
     QColor m_currentStrokeColor = QColor(255, 30, 30);
     QColor m_currentFillColor = Qt::transparent;
-    QFont m_currentFont = QFont("Sans", 14, QFont::Bold);
+    QFont m_currentFont = QFont("Sans", 11, QFont::Bold);
     int m_currentStrokeWidth = 3;
     int m_currentBlurLevel = 4;
     bool m_firstCloseNotification = true;

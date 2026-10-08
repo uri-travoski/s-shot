@@ -23,7 +23,6 @@ private slots:
     void onOpenEditor();
     void onCaptureFullscreen();
     void onCaptureRegion();
-    void onCaptureScrolling();
     void onColorPicker();
     void onOpenSettings();
     void onOpenAbout();
@@ -42,7 +41,6 @@ private:
     QAction* m_actEditor = nullptr;
     QAction* m_actFullscreen = nullptr;
     QAction* m_actRegion = nullptr;
-    QAction* m_actScrolling = nullptr;
     QAction* m_actColorPicker = nullptr;
     QAction* m_actSettings = nullptr;
     QAction* m_actAbout = nullptr;

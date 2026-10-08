@@ -1,7 +1,6 @@
 #include "CaptureManager.h"
 #include "RegionSnippingOverlay.h"
 #include "ColorPickerOverlay.h"
-#include "ScrollingCaptureDialog.h"
 #include "../core/SettingsManager.h"
 #include <QGuiApplication>
 #include <QScreen>
@@ -34,14 +33,6 @@ ColorPickerOverlay* CaptureManager::colorOverlay() {
     return m_colorOverlay;
 }
 
-ScrollingCaptureDialog* CaptureManager::scrollingDialog() {
-    if (!m_scrollingDialog) {
-        m_scrollingDialog = new ScrollingCaptureDialog();
-        connect(m_scrollingDialog, &ScrollingCaptureDialog::scrollingCaptureFinished, this, &CaptureManager::onScrollingCaptured);
-    }
-    return m_scrollingDialog;
-}
-
 void CaptureManager::captureFullscreen() {
     int delay = SettingsManager::instance().captureDelay();
     if (delay > 0) {
@@ -53,8 +44,8 @@ void CaptureManager::captureFullscreen() {
 
 void CaptureManager::doCaptureFullscreen() {
     QScreen* screen = QGuiApplication::primaryScreen();
-    QRect virtualGeo = screen->virtualGeometry();
-    QPixmap grab = screen->grabWindow(0, virtualGeo.x(), virtualGeo.y(), virtualGeo.width(), virtualGeo.height());
+    QRect virtualGeometry = screen->virtualGeometry();
+    QPixmap grab = screen->grabWindow(0, virtualGeometry.x(), virtualGeometry.y(), virtualGeometry.width(), virtualGeometry.height());
 
     if (SettingsManager::instance().autoCopyToClipboard()) {
         QGuiApplication::clipboard()->setPixmap(grab);
@@ -64,7 +55,6 @@ void CaptureManager::doCaptureFullscreen() {
 }
 
 void CaptureManager::captureRegion() {
-    m_isSelectingForScrolling = false;
     int delay = SettingsManager::instance().captureDelay();
     if (delay > 0) {
         QTimer::singleShot(delay * 1000, this, [this]() {
@@ -75,26 +65,11 @@ void CaptureManager::captureRegion() {
     }
 }
 
-void CaptureManager::captureScrollingWindow() {
-    m_isSelectingForScrolling = true;
-    regionOverlay()->startSnipping();
-}
-
 void CaptureManager::pickColor() {
     colorOverlay()->startPicking();
 }
 
 void CaptureManager::onRegionCaptured(const QPixmap& pixmap) {
-    if (m_isSelectingForScrolling) {
-        m_isSelectingForScrolling = false;
-        QRect targetRect = regionOverlay()->selectedRect();
-        if (targetRect.isEmpty() || targetRect.width() < 10 || targetRect.height() < 10) {
-            targetRect = QRect(50, 50, pixmap.width(), pixmap.height());
-        }
-        scrollingDialog()->startWithRegion(targetRect, pixmap);
-        return;
-    }
-
     if (SettingsManager::instance().autoCopyToClipboard()) {
         QGuiApplication::clipboard()->setPixmap(pixmap);
     }
@@ -104,12 +79,4 @@ void CaptureManager::onRegionCaptured(const QPixmap& pixmap) {
 
 void CaptureManager::onColorPicked(const QColor& color, const QString& hex) {
     emit colorPicked(color, hex);
-}
-
-void CaptureManager::onScrollingCaptured(const QPixmap& pixmap) {
-    if (SettingsManager::instance().autoCopyToClipboard()) {
-        QGuiApplication::clipboard()->setPixmap(pixmap);
-    }
-
-    emit screenshotReady(pixmap);
 }

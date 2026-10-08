@@ -50,9 +50,6 @@ public:
     QString hotkeyRegion() const { return m_hotkeyRegion; }
     void setHotkeyRegion(const QString& val) { m_hotkeyRegion = val; }
 
-    QString hotkeyScrolling() const { return m_hotkeyScrolling; }
-    void setHotkeyScrolling(const QString& val) { m_hotkeyScrolling = val; }
-
     QString hotkeyColorPicker() const { return m_hotkeyColorPicker; }
     void setHotkeyColorPicker(const QString& val) { m_hotkeyColorPicker = val; }
 
@@ -85,7 +82,6 @@ private:
 
     QString m_hotkeyFullscreen = "Ctrl+Shift+Print";
     QString m_hotkeyRegion = "Ctrl+Print";
-    QString m_hotkeyScrolling = "Ctrl+Shift+S";
     QString m_hotkeyColorPicker = "Ctrl+Shift+C";
     QString m_hotkeyEditor = "Ctrl+Shift+E";
 

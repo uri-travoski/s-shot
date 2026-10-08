@@ -7,7 +7,6 @@
 enum class HotkeyAction {
     Fullscreen,
     Region,
-    Scrolling,
     ColorPicker,
     Editor
 };

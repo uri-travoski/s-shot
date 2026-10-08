@@ -6,6 +6,7 @@
 #include <QFile>
 #include <QTextStream>
 #include <QDialogButtonBox>
+#include <QCoreApplication>
 #include <unistd.h>
 
 AboutDialog::AboutDialog(QWidget* parent)
@@ -27,7 +28,9 @@ AboutDialog::AboutDialog(QWidget* parent)
     QVBoxLayout* titleLayout = new QVBoxLayout();
     QLabel* nameLabel = new QLabel("S-Shot", this);
     nameLabel->setStyleSheet("font-size: 22px; font-weight: bold; color: #30e500;");
-    QLabel* verLabel = new QLabel(tr("Version 1.27 (Linux x86_64)"), this);
+    QString appVer = QCoreApplication::applicationVersion();
+    if (appVer.isEmpty()) appVer = "1.28";
+    QLabel* verLabel = new QLabel(tr("Version %1 (Linux x86_64)").arg(appVer), this);
     verLabel->setStyleSheet("font-size: 12px; color: #aaaaaa;");
     titleLayout->addWidget(nameLabel);
     titleLayout->addWidget(verLabel);
@@ -41,7 +44,7 @@ AboutDialog::AboutDialog(QWidget* parent)
            "• Multi-tab image & annotation editing<br>"
            "• Full annotation tools (Pen, Arrow, Shapes, Text, Badges, Blur)<br>"
            "• Select tool with Copy, Cut, Delete, and Crop raster actions<br>"
-           "• Fullscreen, Region, Scrolling window, & Color Picker<br>"
+           "• Fullscreen, Region, & Color Picker<br>"
            "• Global shortcuts & System Tray integration"), this);
     descLabel->setWordWrap(true);
     descLabel->setStyleSheet("font-size: 12px; line-height: 1.4; color: #dddddd;");

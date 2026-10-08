@@ -42,7 +42,6 @@ private:
     // Hotkeys tab
     QLineEdit* m_hotkeyFullscreenEdit = nullptr;
     QLineEdit* m_hotkeyRegionEdit = nullptr;
-    QLineEdit* m_hotkeyScrollingEdit = nullptr;
     QLineEdit* m_hotkeyColorPickerEdit = nullptr;
     QLineEdit* m_hotkeyEditorEdit = nullptr;
 

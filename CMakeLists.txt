@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(s-shot
-    VERSION 1.27.0
+    VERSION 1.28.0
     DESCRIPTION "Lightweight Screenshot & Annotation Tool for Linux"
     LANGUAGES CXX
 )
@@ -27,7 +27,6 @@ set(SOURCES
     src/tray/TrayManager.cpp
     src/capture/CaptureManager.cpp
     src/capture/RegionSnippingOverlay.cpp
-    src/capture/ScrollingCaptureDialog.cpp
     src/capture/ColorPickerOverlay.cpp
     src/editor/MainWindow.cpp
     src/editor/CanvasView.cpp
@@ -63,7 +62,6 @@ target_link_libraries(s-shot PRIVATE
     Qt6::Widgets
     Qt6::Svg Qt6::Network
     ${X11_LIBRARIES}
-    ${X11_Xtst_LIB}
 )
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
@@ -83,7 +81,6 @@ add_executable(test_editor_tools
     src/tray/TrayManager.cpp
     src/capture/CaptureManager.cpp
     src/capture/RegionSnippingOverlay.cpp
-    src/capture/ScrollingCaptureDialog.cpp
     src/capture/ColorPickerOverlay.cpp
     src/editor/MainWindow.cpp
     src/editor/CanvasView.cpp
@@ -117,7 +114,6 @@ target_link_libraries(test_editor_tools PRIVATE
     Qt6::Network
     Qt6::Test
     ${X11_LIBRARIES}
-    ${X11_Xtst_LIB}
 )
 add_test(NAME test_editor_tools COMMAND test_editor_tools)
 
@@ -159,7 +155,7 @@ set(CPACK_DEBIAN_PACKAGE_SECTION "graphics")
 set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
 set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS OFF)
 set(CPACK_DEBIAN_PACKAGE_DEPENDS
-    "libc6 (>= 2.34), libgcc-s1 (>= 3.0), libstdc++6 (>= 5), libx11-6, libxtst6, libqt6core6t64 (>= 6.1.2) | libqt6core6 (>= 6.1.2), libqt6gui6t64 (>= 6.1.2) | libqt6gui6 (>= 6.1.2), libqt6widgets6t64 (>= 6.1.2) | libqt6widgets6 (>= 6.1.2), libqt6network6t64 (>= 6.1.2) | libqt6network6 (>= 6.1.2), libqt6svg6t64 (>= 6.1.2) | libqt6svg6 (>= 6.1.2)"
+    "libc6 (>= 2.34), libgcc-s1 (>= 3.0), libstdc++6 (>= 5), libx11-6, libqt6core6t64 (>= 6.1.2) | libqt6core6 (>= 6.1.2), libqt6gui6t64 (>= 6.1.2) | libqt6gui6 (>= 6.1.2), libqt6widgets6t64 (>= 6.1.2) | libqt6widgets6 (>= 6.1.2), libqt6network6t64 (>= 6.1.2) | libqt6network6 (>= 6.1.2), libqt6svg6t64 (>= 6.1.2) | libqt6svg6 (>= 6.1.2)"
 )
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
     "${CMAKE_CURRENT_SOURCE_DIR}/packaging/debian/postinst;${CMAKE_CURRENT_SOURCE_DIR}/packaging/debian/postrm"

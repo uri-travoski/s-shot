@@ -101,6 +101,7 @@ void MainWindow::applyTheme(const QString& theme) {
             "QToolBar { background-color: #dcdcdc; border-bottom: 1px solid #cccccc; spacing: 4px; padding: 3px; }"
             "QToolButton { background-color: transparent; border: 1px solid transparent; border-radius: 4px; padding: 4px; color: #222222; }"
             "QToolButton:hover { background-color: #cccccc; border-color: #b0b0b0; }"
+            "QToolButton:pressed { background-color: #b0b0b0; border: 1px solid #707070; padding-top: 5px; padding-left: 5px; padding-right: 3px; padding-bottom: 3px; }"
             "QToolButton:checked { background-color: #b8b8b8; border: 1px solid #999999; color: #111111; }"
             "QTabWidget::pane { border: none; background-color: #cccccc; }"
             "QTabBar::tab { background-color: #d0d0d0; color: #555555; padding: 8px 16px; border-top-left-radius: 4px; border-top-right-radius: 4px; margin-right: 2px; }"
@@ -128,6 +129,7 @@ void MainWindow::applyTheme(const QString& theme) {
             "QToolBar { background-color: #282828; border: none; spacing: 4px; padding: 3px; }"
             "QToolButton { background-color: transparent; border: 1px solid transparent; border-radius: 4px; padding: 4px; color: #e0e0e0; }"
             "QToolButton:hover { background-color: #383838; border-color: #555555; }"
+            "QToolButton:pressed { background-color: #444444; border: 1px solid #30e500; padding-top: 5px; padding-left: 5px; padding-right: 3px; padding-bottom: 3px; }"
             "QToolButton:checked { background-color: #484848; border: 1px solid #666666; color: #ffffff; }"
             "QTabWidget::pane { border: none; background-color: #202020; }"
             "QTabBar::tab { background-color: #282828; color: #aaaaaa; padding: 8px 16px; border-top-left-radius: 4px; border-top-right-radius: 4px; margin-right: 2px; }"
@@ -219,9 +221,6 @@ void MainWindow::setupMenus() {
     QAction* actCapRegion = capMenu->addAction(IconManager::getIcon("snip"), tr("Capture &Selected Region"), this, &MainWindow::onCaptureRegion);
     registerAct(actCapRegion, "snip");
 
-    QAction* actCapScroll = capMenu->addAction(IconManager::getIcon("scroll"), tr("Capture &Scrolling Window"), this, &MainWindow::onCaptureScrolling);
-    registerAct(actCapScroll, "scroll");
-
     QAction* actCapColor = capMenu->addAction(IconManager::getIcon("picker"), tr("Colour &Picker"), this, &MainWindow::onColorPicker);
     registerAct(actCapColor, "picker");
 
@@ -265,7 +264,25 @@ void MainWindow::setupToolbars() {
     m_mainToolBar->setMovable(false);
     m_mainToolBar->setIconSize(QSize(20, 20));
 
-    QAction* tbNew = m_mainToolBar->addAction(IconManager::getIcon("new"), tr("New"), this, [this]() { createBlankTab(); });
+    connect(m_mainToolBar, &QToolBar::actionTriggered, this, [this](QAction* act) {
+        if (!act) return;
+        QWidget* w = m_mainToolBar->widgetForAction(act);
+        if (w) {
+            bool isDark = (SettingsManager::instance().theme() != "Light");
+            QString flashStyle = isDark 
+                ? "background-color: #2e5c2e; border: 1px solid #30e500; border-radius: 4px;" 
+                : "background-color: #cce4f7; border: 1px solid #0078d7; border-radius: 4px;";
+            w->setStyleSheet(flashStyle);
+            QTimer::singleShot(180, w, [w]() {
+                w->setStyleSheet(QString());
+            });
+        }
+    });
+
+    QAction* tbNew = m_mainToolBar->addAction(IconManager::getIcon("new"), tr("New"), this, [this]() {
+        createBlankTab();
+        statusBar()->showMessage(tr("Created new canvas"), 2000);
+    });
     registerAct(tbNew, "new");
 
     QAction* tbOpen = m_mainToolBar->addAction(IconManager::getIcon("open"), tr("Open"), this, &MainWindow::openFileDialog);
@@ -287,16 +304,36 @@ void MainWindow::setupToolbars() {
 
     m_mainToolBar->addSeparator();
 
-    QAction* tbZoomIn = m_mainToolBar->addAction(IconManager::getIcon("zoom_in"), tr("Zoom In"), this, [this]() { if (currentView()) currentView()->zoomIn(); });
+    QAction* tbZoomIn = m_mainToolBar->addAction(IconManager::getIcon("zoom_in"), tr("Zoom In"), this, [this]() {
+        if (currentView()) {
+            currentView()->zoomIn();
+            statusBar()->showMessage(QString("Zoom: %1%").arg(qRound(currentView()->zoomFactor() * 100)), 2000);
+        }
+    });
     registerAct(tbZoomIn, "zoom_in");
 
-    QAction* tbZoomOut = m_mainToolBar->addAction(IconManager::getIcon("zoom_out"), tr("Zoom Out"), this, [this]() { if (currentView()) currentView()->zoomOut(); });
+    QAction* tbZoomOut = m_mainToolBar->addAction(IconManager::getIcon("zoom_out"), tr("Zoom Out"), this, [this]() {
+        if (currentView()) {
+            currentView()->zoomOut();
+            statusBar()->showMessage(QString("Zoom: %1%").arg(qRound(currentView()->zoomFactor() * 100)), 2000);
+        }
+    });
     registerAct(tbZoomOut, "zoom_out");
 
-    QAction* tbZoom100 = m_mainToolBar->addAction(IconManager::getIcon("zoom_100"), tr("100%"), this, [this]() { if (currentView()) currentView()->zoomActual(); });
+    QAction* tbZoom100 = m_mainToolBar->addAction(IconManager::getIcon("zoom_100"), tr("100%"), this, [this]() {
+        if (currentView()) {
+            currentView()->zoomActual();
+            statusBar()->showMessage(tr("Zoom: 100%"), 2000);
+        }
+    });
     registerAct(tbZoom100, "zoom_100");
 
-    QAction* tbZoomFit = m_mainToolBar->addAction(IconManager::getIcon("zoom_fit"), tr("Fit"), this, [this]() { if (currentView()) currentView()->zoomFit(); });
+    QAction* tbZoomFit = m_mainToolBar->addAction(IconManager::getIcon("zoom_fit"), tr("Fit"), this, [this]() {
+        if (currentView()) {
+            currentView()->zoomFit();
+            statusBar()->showMessage(tr("Zoom: Fit"), 2000);
+        }
+    });
     registerAct(tbZoomFit, "zoom_fit");
 
     // 2. Property Toolbar (below main toolbar)
@@ -341,7 +378,7 @@ void MainWindow::setupToolbars() {
 
     m_fontSizeSpin = new QSpinBox(this);
     m_fontSizeSpin->setRange(6, 144);
-    m_fontSizeSpin->setValue(m_currentFont.pointSize() > 0 ? m_currentFont.pointSize() : 14);
+    m_fontSizeSpin->setValue(m_currentFont.pointSize() > 0 ? m_currentFont.pointSize() : 11);
     m_fontSizeSpin->setFixedWidth(65);
     m_fontSizeSpin->setSuffix(" pt");
     m_fontSizeSpin->setToolTip(tr("Font point size"));
@@ -410,12 +447,12 @@ void MainWindow::setupToolbars() {
         return act;
     };
 
-    m_actPan = addToolAct("hand", tr("Pan / Move Canvas (Hand Tool)"), ToolType::Pan);
-    m_actSelect = addToolAct("select", tr("Select / Area Tool (Copy/Cut/Move/Delete/Crop)"), ToolType::Select, true);
+    m_actPan = addToolAct("hand", tr("Pan / Move Canvas (Hand Tool)"), ToolType::Pan, true);
+    m_actSelect = addToolAct("select", tr("Select / Area Tool (Copy/Cut/Move/Delete/Crop)"), ToolType::Select);
     m_actText = addToolAct("text", tr("Text"), ToolType::Text);
-    m_actArrow = addToolAct("arrow", tr("Arrow"), ToolType::Arrow);
     m_actPen = addToolAct("pen", tr("Pen (Freehand Drawing)"), ToolType::Pen);
     m_actHighlighter = addToolAct("highlighter", tr("Highlighter"), ToolType::Highlighter);
+    m_actArrow = addToolAct("arrow", tr("Arrow"), ToolType::Arrow);
     m_actLine = addToolAct("line", tr("Line"), ToolType::Line);
     m_actDoubleArrow = addToolAct("double_arrow", tr("Double Arrow"), ToolType::DoubleArrow);
     m_actRect = addToolAct("rect", tr("Rectangle"), ToolType::Rectangle);
@@ -425,7 +462,7 @@ void MainWindow::setupToolbars() {
     m_actBucket = addToolAct("bucket", tr("Fill Colour Bucket Tool"), ToolType::BucketFill);
     m_actCrop = addToolAct("crop", tr("Crop Tool"), ToolType::Crop);
 
-    updateToolPropertiesVisibility(ToolType::Select);
+    updateToolPropertiesVisibility(ToolType::Pan);
 }
 
 void MainWindow::setupStatusBar() {
@@ -682,6 +719,9 @@ void MainWindow::onUndo() {
     CanvasScene* scene = currentScene();
     if (scene && scene->undoStack()->canUndo()) {
         scene->undoStack()->undo();
+        statusBar()->showMessage(tr("Undo performed"), 2000);
+    } else {
+        statusBar()->showMessage(tr("Nothing to undo"), 2000);
     }
 }
 
@@ -689,6 +729,9 @@ void MainWindow::onRedo() {
     CanvasScene* scene = currentScene();
     if (scene && scene->undoStack()->canRedo()) {
         scene->undoStack()->redo();
+        statusBar()->showMessage(tr("Redo performed"), 2000);
+    } else {
+        statusBar()->showMessage(tr("Nothing to redo"), 2000);
     }
 }
 
@@ -799,7 +842,7 @@ void MainWindow::onSelectFont() {
         }
         if (m_fontSizeSpin) {
             m_fontSizeSpin->blockSignals(true);
-            m_fontSizeSpin->setValue(f.pointSize() > 0 ? f.pointSize() : 14);
+            m_fontSizeSpin->setValue(f.pointSize() > 0 ? f.pointSize() : 11);
             m_fontSizeSpin->blockSignals(false);
         }
         for (int i = 0; i < m_tabWidget->count(); ++i) {
@@ -936,7 +979,7 @@ void MainWindow::onSceneSelectionChanged() {
     if (sel.isEmpty()) {
         // No items selected: restore properties toolbar to match active tool
         QAction* activeAct = m_toolActionGroup->checkedAction();
-        ToolType tool = activeAct ? static_cast<ToolType>(activeAct->data().toInt()) : ToolType::Select;
+        ToolType tool = activeAct ? static_cast<ToolType>(activeAct->data().toInt()) : ToolType::Pan;
         updateToolPropertiesVisibility(tool);
 
         // Restore toolbar widget values to application defaults
@@ -1021,7 +1064,7 @@ void MainWindow::onSceneSelectionChanged() {
         }
         if (m_fontSizeSpin) {
             m_fontSizeSpin->blockSignals(true);
-            m_fontSizeSpin->setValue(txt->font().pointSize() > 0 ? txt->font().pointSize() : 14);
+            m_fontSizeSpin->setValue(txt->font().pointSize() > 0 ? txt->font().pointSize() : 11);
             m_fontSizeSpin->blockSignals(false);
         }
 
@@ -1214,7 +1257,7 @@ void MainWindow::updateToolPropertiesVisibility(ToolType tool) {
         }
         if (m_fontSizeSpin) {
             m_fontSizeSpin->blockSignals(true);
-            m_fontSizeSpin->setValue(m_currentFont.pointSize() > 0 ? m_currentFont.pointSize() : 14);
+            m_fontSizeSpin->setValue(m_currentFont.pointSize() > 0 ? m_currentFont.pointSize() : 11);
             m_fontSizeSpin->blockSignals(false);
         }
     }
@@ -1264,13 +1307,6 @@ void MainWindow::onCaptureRegion() {
     hide();
     QTimer::singleShot(250, this, []() {
         CaptureManager::instance().captureRegion();
-    });
-}
-
-void MainWindow::onCaptureScrolling() {
-    hide();
-    QTimer::singleShot(250, this, []() {
-        CaptureManager::instance().captureScrollingWindow();
     });
 }
 

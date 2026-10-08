@@ -9,7 +9,7 @@ TextItem::TextItem(const QString& text, const QPointF& pos)
 {
     setPos(pos);
     setPlainText(text);
-    setFont(QFont("Sans", 14, QFont::Bold));
+    setFont(QFont("Sans", 11, QFont::Bold));
     setDefaultTextColor(m_strokeColor);
     setFlag(ItemIsMovable, true);
     setFlag(ItemIsSelectable, true);

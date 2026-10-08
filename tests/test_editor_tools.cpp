@@ -21,7 +21,6 @@
 #include "editor/items/TextItem.h"
 #include "editor/MainWindow.h"
 #include "core/ClipboardHelper.h"
-#include "capture/ScrollingCaptureDialog.h"
 #include <QLabel>
 #include <QSpinBox>
 #include <QPushButton>
@@ -69,7 +68,6 @@ private slots:
     void testMainWindowBadgeIntegration();
     void testToolbarFontControls();
     void testClipboardCopyHelper();
-    void testImageStitchingEngine();
     void testToolbarIconsAndActions();
     void testTextItemMultipleBlocksSelect();
     void testCrashHandlerAndLogging();
@@ -677,6 +675,7 @@ void TestEditorTools::testAutoCheckUpdatesSetting() {
 
 void TestEditorTools::testUpdateManagerVersionComparison() {
     // Newer remote versions
+    QVERIFY(UpdateManager::isVersionNewer("v1.28", "1.27"));
     QVERIFY(UpdateManager::isVersionNewer("v1.27", "1.26"));
     QVERIFY(UpdateManager::isVersionNewer("v1.26", "1.25"));
     QVERIFY(UpdateManager::isVersionNewer("v1.25", "1.24"));
@@ -967,11 +966,12 @@ void TestEditorTools::testToolbarFontControls() {
     QVERIFY(!fontSizeSpin->isVisible());
     QVERIFY(!fontSizeLbl->isVisible());
 
-    // When Text tool is selected, font controls should be visible
+    // When Text tool is selected, font controls should be visible and default to 11 pt
     win.selectTool(ToolType::Text);
     QVERIFY(fontCombo->isVisible());
     QVERIFY(fontSizeSpin->isVisible());
     QVERIFY(fontSizeLbl->isVisible());
+    QCOMPARE(fontSizeSpin->value(), 11);
 
     // Change font size via spinbox
     fontSizeSpin->setValue(28);
@@ -1065,50 +1065,6 @@ void TestEditorTools::testClipboardCopyHelper() {
     QCOMPARE(cropImg.height(), 30);
 }
 
-void TestEditorTools::testImageStitchingEngine() {
-    // 1. Identical slices check
-    QImage sliceA(80, 80, QImage::Format_RGB32);
-    sliceA.fill(qRgb(100, 150, 200));
-    QImage sliceB = sliceA.copy();
-    QVERIFY(ScrollingCaptureDialog::areSlicesIdentical(sliceA, sliceB));
-
-    QImage sliceC(80, 80, QImage::Format_RGB32);
-    sliceC.fill(qRgb(20, 30, 40));
-    QVERIFY(!ScrollingCaptureDialog::areSlicesIdentical(sliceA, sliceC));
-
-    // 2. Overlap stitching check
-    int width = 80;
-    int baseH = 100;
-    int nextH = 80;
-    int overlap = 40;
-
-    QImage baseImg(width, baseH, QImage::Format_RGB32);
-    for (int y = 0; y < baseH; ++y) {
-        QRgb col = (y < (baseH - overlap)) ? qRgb(y * 2, 20, 20) : qRgb(20, (y - (baseH - overlap)) * 5, 80);
-        for (int x = 0; x < width; ++x) {
-            baseImg.setPixel(x, y, col);
-        }
-    }
-
-    QImage nextImg(width, nextH, QImage::Format_RGB32);
-    for (int y = 0; y < nextH; ++y) {
-        QRgb col = (y < overlap) ? qRgb(20, y * 5, 80) : qRgb(80, 180, (y - overlap) * 4);
-        for (int x = 0; x < width; ++x) {
-            nextImg.setPixel(x, y, col);
-        }
-    }
-
-    QImage stitched = ScrollingCaptureDialog::stitchImages(baseImg, nextImg);
-    QCOMPARE(stitched.width(), width);
-    // Overlap should be detected and stitched cleanly
-    QVERIFY(stitched.height() > baseH);
-    QCOMPARE(stitched.height(), baseH + (nextH - overlap));
-
-    // Check pixel at seam area
-    QRgb seamPixel = stitched.pixel(10, baseH);
-    QVERIFY(qGreen(seamPixel) > 150);
-}
-
 void TestEditorTools::testToolbarIconsAndActions() {
     MainWindow win;
     win.createBlankTab(400, 300);
@@ -1121,7 +1077,7 @@ void TestEditorTools::testToolbarIconsAndActions() {
         "zoom_in", "zoom_out", "zoom_100", "zoom_fit",
         "hand", "select", "text", "arrow", "pen", "highlighter", "line",
         "double_arrow", "rect", "ellipse", "badge", "blur", "bucket", "crop",
-        "fullscreen", "snip", "scroll", "picker", "settings", "about", "quit", "s-shot"
+        "fullscreen", "snip", "picker", "settings", "about", "quit", "s-shot"
     };
 
     for (const QString& name : iconNames) {
@@ -1158,6 +1114,56 @@ void TestEditorTools::testToolbarIconsAndActions() {
     QVERIFY(foundEdit);
     QVERIFY(foundCapture);
     QVERIFY(foundView);
+
+    // Verify left toolbar tool ordering: Arrow must be directly below Highlighter
+    QToolBar* leftBar = nullptr;
+    QToolBar* mainBar = nullptr;
+    for (auto* tb : win.findChildren<QToolBar*>()) {
+        if (tb->orientation() == Qt::Vertical) {
+            leftBar = tb;
+        } else if (tb->windowTitle() == "Main Toolbar") {
+            mainBar = tb;
+        }
+    }
+    QVERIFY(leftBar != nullptr);
+    QVERIFY(mainBar != nullptr);
+
+    QList<QAction*> leftActs = leftBar->actions();
+    int idxHighlighter = -1;
+    int idxArrow = -1;
+    for (int i = 0; i < leftActs.size(); ++i) {
+        if (leftActs[i]->data().toInt() == static_cast<int>(ToolType::Highlighter)) idxHighlighter = i;
+        if (leftActs[i]->data().toInt() == static_cast<int>(ToolType::Arrow)) idxArrow = i;
+    }
+    QVERIFY(idxHighlighter >= 0);
+    QCOMPARE(idxArrow, idxHighlighter + 1);
+
+    // Verify default tool is Pan/Hand tool and default font is 11 pt
+    QVERIFY(win.currentScene() != nullptr);
+    QCOMPARE(win.currentScene()->currentTool(), ToolType::Pan);
+    QCOMPARE(win.currentScene()->currentFont().pointSize(), 11);
+
+    // Verify main toolbar visual feedback when an action is triggered
+    QAction* copyAct = nullptr;
+    for (auto* a : mainBar->actions()) {
+        if (a->text().contains("Copy")) {
+            copyAct = a;
+            break;
+        }
+    }
+    QVERIFY(copyAct != nullptr);
+    QWidget* copyBtn = mainBar->widgetForAction(copyAct);
+    QVERIFY(copyBtn != nullptr);
+    copyAct->trigger();
+    QVERIFY(!copyBtn->styleSheet().isEmpty());
+    QTest::qWait(250);
+    QVERIFY(copyBtn->styleSheet().isEmpty());
+
+    // Capture preview for visual verification
+    win.resize(1000, 600);
+    win.show();
+    QTest::qWait(100);
+    win.grab().save("/home/owner/distrobox-homes/devbox/.gemini/antigravity/brain/e77fcd3f-2a52-4f22-843d-d82ecd75f998/toolbar_updated_preview.png");
 }
 
 void TestEditorTools::testTextItemMultipleBlocksSelect() {

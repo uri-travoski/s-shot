@@ -59,7 +59,6 @@ void TrayManager::createTrayMenu() {
     // Group 2: Capture Actions
     m_actFullscreen = m_trayMenu->addAction(tr("Capture Fullscreen"), this, &TrayManager::onCaptureFullscreen);
     m_actRegion = m_trayMenu->addAction(tr("Capture Selected Region"), this, &TrayManager::onCaptureRegion);
-    m_actScrolling = m_trayMenu->addAction(tr("Capture Scrolling Window"), this, &TrayManager::onCaptureScrolling);
     m_actColorPicker = m_trayMenu->addAction(tr("Colour Picker"), this, &TrayManager::onColorPicker);
 
     // Divider 2
@@ -132,10 +131,6 @@ void TrayManager::onCaptureFullscreen() {
 
 void TrayManager::onCaptureRegion() {
     CaptureManager::instance().captureRegion();
-}
-
-void TrayManager::onCaptureScrolling() {
-    CaptureManager::instance().captureScrollingWindow();
 }
 
 void TrayManager::onColorPicker() {
