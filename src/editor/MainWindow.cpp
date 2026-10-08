@@ -6,8 +6,13 @@
 #include "../capture/CaptureManager.h"
 #include "../dialogs/SettingsDialog.h"
 #include "../dialogs/AboutDialog.h"
+#include "../core/CrashHandler.h"
 #include <QMenuBar>
 #include <QMenu>
+#include <QTextEdit>
+#include <QDesktopServices>
+#include <QUrl>
+#include <QFontDatabase>
 #include <QStatusBar>
 #include <QFileDialog>
 #include <QColorDialog>
@@ -244,6 +249,8 @@ void MainWindow::setupMenus() {
     QAction* actCheckUpdates = helpMenu->addAction(tr("Check for &Updates..."), this, [this]() {
         UpdateManager::instance().checkForUpdates(false, this);
     });
+    QAction* actLogs = helpMenu->addAction(IconManager::getIcon("open"), tr("View &Logs / Crash Reports..."), this, &MainWindow::openLogViewerDialog);
+    registerAct(actLogs, "open");
     QAction* actAbout = helpMenu->addAction(IconManager::getIcon("about"), tr("&About S-Shot"), this, &MainWindow::openAboutDialog);
     registerAct(actAbout, "about");
 }
@@ -1273,6 +1280,61 @@ void MainWindow::openSettingsDialog() {
 
 void MainWindow::openAboutDialog() {
     AboutDialog dlg(this);
+    dlg.exec();
+}
+
+void MainWindow::openLogViewerDialog() {
+    QDialog dlg(this);
+    dlg.setWindowTitle(tr("S-Shot Logs & Diagnostics"));
+    dlg.resize(650, 480);
+    dlg.setStyleSheet("QDialog { background-color: #242424; color: #ffffff; }");
+
+    QVBoxLayout* layout = new QVBoxLayout(&dlg);
+    layout->setSpacing(10);
+    layout->setContentsMargins(16, 16, 16, 16);
+
+    QTabWidget* tabWidget = new QTabWidget(&dlg);
+    tabWidget->setStyleSheet("QTabWidget::pane { border: 1px solid #333333; } "
+                             "QTabBar::tab { background: #2a2a2a; color: #bbb; padding: 6px 12px; } "
+                             "QTabBar::tab:selected { background: #383838; color: #fff; }");
+
+    auto createViewer = [](const QString& filePath, const QString& emptyMsg) -> QTextEdit* {
+        QTextEdit* edit = new QTextEdit();
+        edit->setReadOnly(true);
+        edit->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
+        edit->setStyleSheet("background-color: #1a1a1a; color: #e0e0e0; border: none; font-family: monospace; font-size: 11px;");
+        QFile file(filePath);
+        if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            QString content = QString::fromUtf8(file.readAll());
+            edit->setPlainText(content.isEmpty() ? emptyMsg : content);
+        } else {
+            edit->setPlainText(emptyMsg);
+        }
+        return edit;
+    };
+
+    QTextEdit* appLogEdit = createViewer(CrashHandler::logPath(), tr("No application logs recorded yet."));
+    QTextEdit* crashLogEdit = createViewer(CrashHandler::crashLogPath(), tr("No crash reports found. The application is running normally."));
+
+    tabWidget->addTab(appLogEdit, tr("Application Log (s-shot.log)"));
+    tabWidget->addTab(crashLogEdit, tr("Crash Log (crash.log)"));
+    layout->addWidget(tabWidget);
+
+    QHBoxLayout* btnLayout = new QHBoxLayout();
+    QPushButton* openDirBtn = new QPushButton(tr("Open Logs Folder"), &dlg);
+    openDirBtn->setStyleSheet("QPushButton { background-color: #383838; color: #fff; padding: 6px 12px; border-radius: 4px; }");
+    connect(openDirBtn, &QPushButton::clicked, []() {
+        QDesktopServices::openUrl(QUrl::fromLocalFile(CrashHandler::logDir()));
+    });
+    btnLayout->addWidget(openDirBtn);
+    btnLayout->addStretch();
+
+    QPushButton* closeBtn = new QPushButton(tr("Close"), &dlg);
+    closeBtn->setStyleSheet("QPushButton { background-color: #383838; color: #fff; padding: 6px 14px; border-radius: 4px; }");
+    connect(closeBtn, &QPushButton::clicked, &dlg, &QDialog::accept);
+    btnLayout->addWidget(closeBtn);
+
+    layout->addLayout(btnLayout);
     dlg.exec();
 }
 

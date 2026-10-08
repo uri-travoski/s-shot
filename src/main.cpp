@@ -12,6 +12,7 @@
 #include "core/HotkeyManager.h"
 #include "core/UpdateManager.h"
 #include "core/IconManager.h"
+#include "core/CrashHandler.h"
 #include "tray/TrayManager.h"
 #include "capture/CaptureManager.h"
 #include "editor/MainWindow.h"
@@ -20,25 +21,11 @@ int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
     app.setApplicationName("s-shot");
     app.setApplicationDisplayName("S-Shot");
-    app.setApplicationVersion("1.25");
+    app.setApplicationVersion("1.26");
     app.setOrganizationName("S-Shot");
     app.setWindowIcon(IconManager::getAppIcon());
 
-    const QString serverName = "s-shot-single-instance-socket";
-    QLocalSocket socket;
-    socket.connectToServer(serverName);
-    if (socket.waitForConnected(500)) {
-        QStringList args = app.arguments();
-        args.removeFirst();
-        QByteArray data = args.join(";").toUtf8();
-        socket.write(data);
-        socket.waitForBytesWritten(1000);
-        return 0;
-    }
-
-    QLocalServer server;
-    QLocalServer::removeServer(serverName);
-    server.listen(serverName);
+    CrashHandler::init();
 
     QCommandLineParser parser;
     parser.setApplicationDescription("S-Shot: Lightweight Linux Screenshot & Annotation Tool");
@@ -65,6 +52,22 @@ int main(int argc, char* argv[]) {
 
     parser.addPositionalArgument("file", "Image file to open", "[file]");
     parser.process(app);
+
+    const QString serverName = "s-shot-single-instance-socket";
+    QLocalSocket socket;
+    socket.connectToServer(serverName);
+    if (socket.waitForConnected(500)) {
+        QStringList args = app.arguments();
+        args.removeFirst();
+        QByteArray data = args.join(";").toUtf8();
+        socket.write(data);
+        socket.waitForBytesWritten(1000);
+        return 0;
+    }
+
+    QLocalServer server;
+    QLocalServer::removeServer(serverName);
+    server.listen(serverName);
 
     SettingsManager& settings = SettingsManager::instance();
     CaptureManager& captureMgr = CaptureManager::instance();

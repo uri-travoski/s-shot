@@ -40,8 +40,8 @@ private:
 
 class AddItemCommand : public QUndoCommand {
 public:
-    AddItemCommand(QGraphicsScene* scene, QGraphicsItem* item, QUndoCommand* parent = nullptr)
-        : QUndoCommand(parent), m_scene(scene), m_item(item) {
+    AddItemCommand(QGraphicsScene* scene, QGraphicsItem* item, bool alreadyInScene = false, QUndoCommand* parent = nullptr)
+        : QUndoCommand(parent), m_scene(scene), m_item(item), m_inScene(alreadyInScene) {
         setText("Add Annotation");
     }
     ~AddItemCommand() {
@@ -54,8 +54,10 @@ public:
         m_inScene = false;
     }
     void redo() override {
-        m_scene->addItem(m_item);
-        m_inScene = true;
+        if (!m_inScene) {
+            m_scene->addItem(m_item);
+            m_inScene = true;
+        }
     }
 private:
     QGraphicsScene* m_scene;
@@ -154,7 +156,8 @@ void CanvasScene::setCurrentTool(ToolType tool) {
     clearAreaSelection();
 
     // Enable/disable movable flags depending on tool
-    for (auto* item : items()) {
+    auto allItems = items();
+    for (auto* item : allItems) {
         if (item != m_basePixmapItem && item != m_areaSelectionRectItem) {
             item->setFlag(QGraphicsItem::ItemIsSelectable, tool == ToolType::Select);
             item->setFlag(QGraphicsItem::ItemIsMovable, tool == ToolType::Select);
@@ -628,11 +631,12 @@ void CanvasScene::createNewItem(const QPointF& pos) {
         addItem(txt);
         connect(txt, &TextItem::initialCreationFinished, this, [this, txt](bool hasText) {
             if (!hasText) {
-                removeItem(txt);
-                delete txt;
+                if (txt->scene() == this) {
+                    removeItem(txt);
+                }
+                txt->deleteLater();
             } else {
-                removeItem(txt);
-                m_undoStack.push(new AddItemCommand(this, txt));
+                m_undoStack.push(new AddItemCommand(this, txt, true));
                 emit sceneModified();
             }
         });

@@ -36,6 +36,7 @@ public slots:
     void copyActiveImageToClipboard();
     void openSettingsDialog();
     void openAboutDialog();
+    void openLogViewerDialog();
 
     // Capture slots
     void onCaptureFullscreen();

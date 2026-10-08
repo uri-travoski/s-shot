@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(s-shot
-    VERSION 1.25.0
+    VERSION 1.26.0
     DESCRIPTION "Lightweight Screenshot & Annotation Tool for Linux"
     LANGUAGES CXX
 )
@@ -23,6 +23,7 @@ set(SOURCES
     src/core/UpdateManager.cpp
     src/core/IconManager.cpp
     src/core/ClipboardHelper.cpp
+    src/core/CrashHandler.cpp
     src/tray/TrayManager.cpp
     src/capture/CaptureManager.cpp
     src/capture/RegionSnippingOverlay.cpp
@@ -78,6 +79,7 @@ add_executable(test_editor_tools
     src/core/UpdateManager.cpp
     src/core/IconManager.cpp
     src/core/ClipboardHelper.cpp
+    src/core/CrashHandler.cpp
     src/tray/TrayManager.cpp
     src/capture/CaptureManager.cpp
     src/capture/RegionSnippingOverlay.cpp

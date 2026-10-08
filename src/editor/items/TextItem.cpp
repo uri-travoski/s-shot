@@ -48,7 +48,9 @@ void TextItem::finishEditing() {
     m_isEditing = false;
     setTextInteractionFlags(Qt::NoTextInteraction);
     setFlag(ItemIsMovable, true);
-    clearFocus();
+    if (hasFocus()) {
+        clearFocus();
+    }
     update();
 
     if (m_isInitialCreation) {
@@ -95,14 +97,38 @@ void TextItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* option, 
     }
 }
 
+void TextItem::mousePressEvent(QGraphicsSceneMouseEvent* event) {
+    if (!m_isEditing) {
+        QGraphicsItem::mousePressEvent(event);
+        return;
+    }
+    QGraphicsTextItem::mousePressEvent(event);
+}
+
+void TextItem::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
+    if (!m_isEditing) {
+        QGraphicsItem::mouseMoveEvent(event);
+        return;
+    }
+    QGraphicsTextItem::mouseMoveEvent(event);
+}
+
+void TextItem::mouseReleaseEvent(QGraphicsSceneMouseEvent* event) {
+    if (!m_isEditing) {
+        QGraphicsItem::mouseReleaseEvent(event);
+        return;
+    }
+    QGraphicsTextItem::mouseReleaseEvent(event);
+}
+
 void TextItem::focusInEvent(QFocusEvent* event) {
     m_isEditing = true;
     QGraphicsTextItem::focusInEvent(event);
 }
 
 void TextItem::focusOutEvent(QFocusEvent* event) {
-    finishEditing();
     QGraphicsTextItem::focusOutEvent(event);
+    finishEditing();
 }
 
 void TextItem::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) {

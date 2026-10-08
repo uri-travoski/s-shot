@@ -11,6 +11,7 @@
 #include "core/SettingsManager.h"
 #include "core/UpdateManager.h"
 #include "core/IconManager.h"
+#include "core/CrashHandler.h"
 #include "capture/RegionSnippingOverlay.h"
 #include "editor/items/PenItem.h"
 #include "editor/items/BlurItem.h"
@@ -69,6 +70,8 @@ private slots:
     void testClipboardCopyHelper();
     void testImageStitchingEngine();
     void testToolbarIconsAndActions();
+    void testTextItemMultipleBlocksSelect();
+    void testCrashHandlerAndLogging();
 };
 
 void TestEditorTools::initTestCase() {
@@ -672,6 +675,7 @@ void TestEditorTools::testAutoCheckUpdatesSetting() {
 
 void TestEditorTools::testUpdateManagerVersionComparison() {
     // Newer remote versions
+    QVERIFY(UpdateManager::isVersionNewer("v1.26", "1.25"));
     QVERIFY(UpdateManager::isVersionNewer("v1.25", "1.24"));
     QVERIFY(UpdateManager::isVersionNewer("v1.24", "1.23"));
     QVERIFY(UpdateManager::isVersionNewer("1.23.1", "1.23"));
@@ -1151,6 +1155,105 @@ void TestEditorTools::testToolbarIconsAndActions() {
     QVERIFY(foundEdit);
     QVERIFY(foundCapture);
     QVERIFY(foundView);
+}
+
+void TestEditorTools::testTextItemMultipleBlocksSelect() {
+    MainWindow win;
+    win.createBlankTab(400, 300);
+    win.resize(900, 600);
+    win.show();
+    QTest::qWait(50);
+
+    CanvasScene* scene = win.currentScene();
+    CanvasView* view = win.currentView();
+    QVERIFY(scene != nullptr);
+    QVERIFY(view != nullptr);
+
+    // 1. Select Text Tool
+    win.selectTool(ToolType::Text);
+    QTest::qWait(50);
+
+    // 2. Click to add first text block at (60, 60)
+    QPoint pt1 = view->mapFromScene(QPointF(60, 60));
+    QTest::mouseClick(view->viewport(), Qt::LeftButton, Qt::NoModifier, pt1);
+    QTest::qWait(50);
+
+    // Type text into first block
+    QTest::keyClicks(view->viewport(), "First text block");
+    QTest::qWait(50);
+
+    // 3. Click to add second text block at (180, 180)
+    QPoint pt2 = view->mapFromScene(QPointF(180, 180));
+    QTest::mouseClick(view->viewport(), Qt::LeftButton, Qt::NoModifier, pt2);
+    QTest::qWait(50);
+
+    // Type text into second block
+    QTest::keyClicks(view->viewport(), "Second text block");
+    QTest::qWait(50);
+
+    // 4. Switch to Select tool
+    win.selectTool(ToolType::Select);
+    QTest::qWait(50);
+
+    // 5. Click on second block to select it
+    QTest::mouseClick(view->viewport(), Qt::LeftButton, Qt::NoModifier, pt2);
+    QTest::qWait(50);
+
+    // 6. Click on first block to select it
+    QTest::mouseClick(view->viewport(), Qt::LeftButton, Qt::NoModifier, pt1);
+    QTest::qWait(50);
+
+    // 7. Add empty text block and switch to Select tool without typing
+    win.selectTool(ToolType::Text);
+    QPoint pt3 = view->mapFromScene(QPointF(250, 250));
+    QTest::mouseClick(view->viewport(), Qt::LeftButton, Qt::NoModifier, pt3);
+    QTest::qWait(50);
+    win.selectTool(ToolType::Select);
+    QTest::qWait(50);
+
+    // Click on pt1 or pt2 again
+    QTest::mouseClick(view->viewport(), Qt::LeftButton, Qt::NoModifier, pt2);
+    QTest::qWait(50);
+}
+
+void TestEditorTools::testCrashHandlerAndLogging() {
+    // 1. Verify CrashHandler paths
+    CrashHandler::init();
+    QString logPath = CrashHandler::logPath();
+    QString crashPath = CrashHandler::crashLogPath();
+    QString logDir = CrashHandler::logDir();
+
+    QVERIFY(!logPath.isEmpty());
+    QVERIFY(logPath.endsWith("s-shot.log"));
+    QVERIFY(!crashPath.isEmpty());
+    QVERIFY(crashPath.endsWith("crash.log"));
+    QVERIFY(!logDir.isEmpty());
+
+    // 2. Emit a warning and verify it gets captured into s-shot.log
+    QString testMsg = QString("Test log entry %1").arg(QDateTime::currentMSecsSinceEpoch());
+    qWarning() << testMsg;
+
+    QFile file(logPath);
+    QVERIFY(file.open(QIODevice::ReadOnly | QIODevice::Text));
+    QString fileContent = QString::fromUtf8(file.readAll());
+    file.close();
+    QVERIFY(fileContent.contains(testMsg));
+
+    // 3. Verify MainWindow has View Logs action in Help menu
+    MainWindow win;
+    QMenuBar* mb = win.menuBar();
+    QAction* logsAction = nullptr;
+    for (QAction* action : mb->actions()) {
+        if (action->menu()) {
+            for (QAction* subAct : action->menu()->actions()) {
+                if (subAct->text().contains("Logs") || subAct->text().contains("Crash Reports")) {
+                    logsAction = subAct;
+                    break;
+                }
+            }
+        }
+    }
+    QVERIFY(logsAction != nullptr);
 }
 
 int main(int argc, char** argv) {
