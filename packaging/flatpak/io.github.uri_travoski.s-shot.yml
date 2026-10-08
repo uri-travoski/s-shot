@@ -10,7 +10,7 @@ finish-args:
   - --socket=wayland
   - --filesystem=xdg-pictures
   - --talk-name=org.kde.StatusNotifierWatcher
-  - --own-name=org.kde.StatusNotifierItem-1-*
+  - --own-name=org.kde.StatusNotifierItem-1-1
   - --talk-name=org.freedesktop.Notifications
 
 modules:
