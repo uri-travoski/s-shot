@@ -22,4 +22,4 @@ modules:
     sources:
       - type: archive
         url: https://github.com/uri-travoski/s-shot/archive/refs/tags/v1.29.tar.gz
-        sha256: 049faedc3cb9909908dc06fc15d9eac80a6d5562b9270e6a8c6f153db8f7bbca
+        sha256: 3d0801a0f3b96d81b4322b5b66acad5ae0fabd00fbd5e6ae1a4c8775841ec5b5
