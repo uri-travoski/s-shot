@@ -672,9 +672,10 @@ void TestEditorTools::testAutoCheckUpdatesSetting() {
 
 void TestEditorTools::testUpdateManagerVersionComparison() {
     // Newer remote versions
+    QVERIFY(UpdateManager::isVersionNewer("v1.25", "1.24"));
     QVERIFY(UpdateManager::isVersionNewer("v1.24", "1.23"));
     QVERIFY(UpdateManager::isVersionNewer("1.23.1", "1.23"));
-    QVERIFY(UpdateManager::isVersionNewer("v1.24.0", "1.23.0"));
+    QVERIFY(UpdateManager::isVersionNewer("v1.25.0", "1.24.0"));
     QVERIFY(UpdateManager::isVersionNewer("v2.0", "1.23"));
     QVERIFY(UpdateManager::isVersionNewer("v2.0.0", "1.23.0"));
 

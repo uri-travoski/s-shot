@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(s-shot
-    VERSION 1.24.0
+    VERSION 1.25.0
     DESCRIPTION "Lightweight Screenshot & Annotation Tool for Linux"
     LANGUAGES CXX
 )
@@ -155,7 +155,10 @@ set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
 set(CPACK_DEBIAN_PACKAGE_MAINTAINER "S-Shot Developer <support@example.com>")
 set(CPACK_DEBIAN_PACKAGE_SECTION "graphics")
 set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
-set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS OFF)
+set(CPACK_DEBIAN_PACKAGE_DEPENDS
+    "libc6 (>= 2.34), libgcc-s1 (>= 3.0), libstdc++6 (>= 5), libx11-6, libxtst6, libqt6core6t64 (>= 6.1.2) | libqt6core6 (>= 6.1.2), libqt6gui6t64 (>= 6.1.2) | libqt6gui6 (>= 6.1.2), libqt6widgets6t64 (>= 6.1.2) | libqt6widgets6 (>= 6.1.2), libqt6network6t64 (>= 6.1.2) | libqt6network6 (>= 6.1.2), libqt6svg6t64 (>= 6.1.2) | libqt6svg6 (>= 6.1.2)"
+)
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
     "${CMAKE_CURRENT_SOURCE_DIR}/packaging/debian/postinst;${CMAKE_CURRENT_SOURCE_DIR}/packaging/debian/postrm"
 )

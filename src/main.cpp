@@ -20,7 +20,7 @@ int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
     app.setApplicationName("s-shot");
     app.setApplicationDisplayName("S-Shot");
-    app.setApplicationVersion("1.24");
+    app.setApplicationVersion("1.25");
     app.setOrganizationName("S-Shot");
     app.setWindowIcon(IconManager::getAppIcon());
 

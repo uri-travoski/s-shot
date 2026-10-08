@@ -48,6 +48,7 @@ jobs:
           mkdir -p dist
           mv build/*.deb dist/
           mv build/*.rpm dist/
+          dpkg-deb -I dist/*.deb
 
       - name: Build AppImage
         run: |
