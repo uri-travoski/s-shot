@@ -44,6 +44,11 @@
   </screenshots>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.30" date="2026-10-08">
+      <description>
+        <p>Support pasting copied images directly onto the active canvas, white canvas expansion, borderless text boxes, white background on selected area deletion, and full Flathub specification integration.</p>
+      </description>
+    </release>
     <release version="1.29" date="2026-10-08">
       <description>
         <p>Canvas expansion background filled with white, borderless text boxes, white background on selected area deletion, and full Flathub specification integration.</p>

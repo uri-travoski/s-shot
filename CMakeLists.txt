@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(s-shot
-    VERSION 1.29.0
+    VERSION 1.30.0
     DESCRIPTION "Lightweight Screenshot & Annotation Tool for Linux"
     LANGUAGES CXX
 )
