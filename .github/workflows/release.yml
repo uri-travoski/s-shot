@@ -70,8 +70,8 @@ jobs:
           ./linuxdeploy-root/usr/bin/linuxdeploy \
             --appdir AppDir \
             -e AppDir/usr/bin/s-shot \
-            -i resources/icons/s-shot.svg \
-            -d resources/s-shot.desktop \
+            -i resources/icons/io.github.uri_travoski.s-shot.svg \
+            -d resources/io.github.uri_travoski.s-shot.desktop \
             --output appimage
 
           # Clean tool AppImages and keep only S-Shot

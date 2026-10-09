@@ -4,6 +4,10 @@ set -e
 # Terminate any running s-shot background instances so new version takes effect
 pkill -x s-shot 2>/dev/null || killall s-shot 2>/dev/null || true
 
+# Remove legacy s-shot.desktop if present to prevent duplicate 'Open With' entries
+rm -f /usr/share/applications/s-shot.desktop 2>/dev/null || true
+rm -f /usr/local/share/applications/s-shot.desktop 2>/dev/null || true
+
 if [ -x /usr/bin/update-desktop-database ]; then
     /usr/bin/update-desktop-database -q /usr/share/applications || true
 fi

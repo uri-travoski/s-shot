@@ -44,6 +44,11 @@
   </screenshots>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.31" date="2026-10-09">
+      <description>
+        <p>Directional canvas edge reduction and cropping, fixed Backspace and Delete keys inside text boxes during editing, desktop entry deduplication, and viewport boundary synchronization.</p>
+      </description>
+    </release>
     <release version="1.30" date="2026-10-08">
       <description>
         <p>Support pasting copied images directly onto the active canvas, white canvas expansion, borderless text boxes, white background on selected area deletion, and full Flathub specification integration.</p>

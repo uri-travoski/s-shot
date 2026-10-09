@@ -246,6 +246,15 @@ void CanvasScene::setBasePixmap(const QPixmap& pixmap) {
         static_cast<CanvasFrameItem*>(m_canvasFrameItem)->notifyGeometryChange();
         m_canvasFrameItem->update();
     }
+    for (auto* item : items()) {
+        if (auto* blur = dynamic_cast<BlurItem*>(item)) {
+            blur->updateEffect(pixmap);
+        }
+    }
+    update();
+    for (auto* view : views()) {
+        view->viewport()->update();
+    }
     emit sceneModified();
 }
 
@@ -334,6 +343,7 @@ void CanvasScene::clearAreaSelection() {
     m_selectedArea = QRectF();
     if (m_areaSelectionRectItem) {
         m_areaSelectionRectItem->setVisible(false);
+        m_areaSelectionRectItem->setRect(QRectF());
     }
     emit areaSelectionChanged(QRectF(), false);
 }
@@ -533,8 +543,8 @@ void CanvasScene::resizeCanvas(const QRectF& newBounds, const QString& undoText)
 
     int newW = qMax(20, qRound(newBounds.width()));
     int newH = qMax(20, qRound(newBounds.height()));
-    int shiftX = (newBounds.x() < 0) ? qRound(-newBounds.x()) : 0;
-    int shiftY = (newBounds.y() < 0) ? qRound(-newBounds.y()) : 0;
+    int shiftX = qRound(-newBounds.x());
+    int shiftY = qRound(-newBounds.y());
 
     if (newW == oldPix.width() && newH == oldPix.height() && shiftX == 0 && shiftY == 0) {
         return;
@@ -742,6 +752,9 @@ void CanvasScene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
             if (auto* txt = dynamic_cast<TextItem*>(clicked)) {
                 clearSelection();
                 txt->setSelected(true);
+                if (!txt->isEditing()) {
+                    txt->startEditing();
+                }
                 QGraphicsScene::mousePressEvent(event);
                 return;
             }
@@ -851,6 +864,7 @@ void CanvasScene::mouseReleaseEvent(QGraphicsSceneMouseEvent* event) {
             m_isResizingCanvas = false;
             QRectF guideRect = m_canvasResizeGuideItem->rect();
             m_canvasResizeGuideItem->setVisible(false);
+            m_canvasResizeGuideItem->setRect(QRectF());
             m_activeHandle = CanvasHandle::None;
             if (m_canvasFrameItem) m_canvasFrameItem->update();
 
@@ -896,6 +910,19 @@ void CanvasScene::mouseReleaseEvent(QGraphicsSceneMouseEvent* event) {
 }
 
 void CanvasScene::keyPressEvent(QKeyEvent* event) {
+    // 1. If any TextItem is currently active and editing text, forward all keyboard events directly to it
+    for (auto* item : items()) {
+        if (auto* txt = dynamic_cast<TextItem*>(item)) {
+            if (txt->isEditing()) {
+                if (focusItem() != txt) {
+                    txt->setFocus();
+                }
+                QGraphicsScene::keyPressEvent(event);
+                return;
+            }
+        }
+    }
+
     if (m_currentTool == ToolType::Select && hasAreaSelection()) {
         if (event->matches(QKeySequence::Copy)) {
             copySelectedArea();

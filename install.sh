@@ -76,7 +76,9 @@ if [ "$UNINSTALL" = true ]; then
     echo "Uninstalling $DISPLAY_NAME from $PREFIX..."
     rm -f "$BIN_DIR/$APP_NAME"
     rm -f "$DESKTOP_DIR/$APP_NAME.desktop"
+    rm -f "$DESKTOP_DIR/io.github.uri_travoski.s-shot.desktop"
     rm -f "$ICON_DIR/$APP_NAME.svg"
+    rm -f "$ICON_DIR/io.github.uri_travoski.s-shot.svg"
 
     if command -v update-desktop-database >/dev/null 2>&1; then
         update-desktop-database "$DESKTOP_DIR" 2>/dev/null || true
@@ -118,11 +120,15 @@ mkdir -p "$ICON_DIR"
 echo "Installing binary to $BIN_DIR/$APP_NAME..."
 install -m 755 "$BINARY_PATH" "$BIN_DIR/$APP_NAME"
 
-echo "Installing icon to $ICON_DIR/$APP_NAME.svg..."
+echo "Installing icon to $ICON_DIR/io.github.uri_travoski.s-shot.svg..."
+install -m 644 "$SCRIPT_DIR/resources/icons/io.github.uri_travoski.s-shot.svg" "$ICON_DIR/io.github.uri_travoski.s-shot.svg"
 install -m 644 "$SCRIPT_DIR/resources/icons/s-shot.svg" "$ICON_DIR/$APP_NAME.svg"
 
-echo "Installing desktop launcher to $DESKTOP_DIR/$APP_NAME.desktop..."
-install -m 644 "$SCRIPT_DIR/resources/s-shot.desktop" "$DESKTOP_DIR/$APP_NAME.desktop"
+# Remove legacy desktop file if present to prevent duplicate 'Open With' entries
+rm -f "$DESKTOP_DIR/$APP_NAME.desktop" 2>/dev/null || true
+
+echo "Installing desktop launcher to $DESKTOP_DIR/io.github.uri_travoski.s-shot.desktop..."
+install -m 644 "$SCRIPT_DIR/resources/io.github.uri_travoski.s-shot.desktop" "$DESKTOP_DIR/io.github.uri_travoski.s-shot.desktop"
 
 # Refresh desktop caches
 if command -v update-desktop-database >/dev/null 2>&1; then

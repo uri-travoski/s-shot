@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "items/TextItem.h"
 #include "../core/SettingsManager.h"
 #include "../core/UpdateManager.h"
 #include "../core/IconManager.h"
@@ -10,6 +11,7 @@
 #include <QMenuBar>
 #include <QMenu>
 #include <QTextEdit>
+#include <QTextCursor>
 #include <QDesktopServices>
 #include <QUrl>
 #include <QFontDatabase>
@@ -557,13 +559,29 @@ void MainWindow::openImage(const QString& filePath) {
 }
 
 void MainWindow::pasteFromClipboard() {
+    CanvasScene* scene = currentScene();
+    if (scene) {
+        for (auto* it : scene->items()) {
+            if (auto* txt = dynamic_cast<TextItem*>(it)) {
+                if (txt->isEditing()) {
+                    QClipboard* clip = QGuiApplication::clipboard();
+                    if (clip && !clip->text().isEmpty()) {
+                        QTextCursor cursor = txt->textCursor();
+                        cursor.insertText(clip->text());
+                        txt->setTextCursor(cursor);
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
     QPixmap pix = ClipboardHelper::getClipboardImage();
     if (pix.isNull()) {
         statusBar()->showMessage(tr("No image in clipboard to paste"), 2000);
         return;
     }
 
-    CanvasScene* scene = currentScene();
     if (scene) {
         scene->pasteImage(pix);
         if (m_actSelect) {
@@ -628,6 +646,19 @@ void MainWindow::saveActiveTabAs() {
 void MainWindow::copyActiveImageToClipboard() {
     CanvasScene* scene = currentScene();
     if (!scene) return;
+
+    for (auto* it : scene->items()) {
+        if (auto* txt = dynamic_cast<TextItem*>(it)) {
+            if (txt->isEditing()) {
+                QString selText = txt->textCursor().selectedText();
+                if (!selText.isEmpty()) {
+                    QGuiApplication::clipboard()->setText(selText);
+                    statusBar()->showMessage(tr("Copied text to clipboard"), 2000);
+                    return;
+                }
+            }
+        }
+    }
 
     QPixmap outPix;
     if (scene->hasAreaSelection()) {

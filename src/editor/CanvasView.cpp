@@ -42,6 +42,13 @@ CanvasView::CanvasView(CanvasScene* scene, QWidget* parent)
     m_areaActionWidget->hide();
 
     connect(m_scene, &CanvasScene::areaSelectionChanged, this, &CanvasView::onAreaSelectionChanged);
+    connect(m_scene, &QGraphicsScene::sceneRectChanged, this, [this](const QRectF& rect) {
+        setSceneRect(rect);
+        viewport()->update();
+    });
+    if (!m_scene->sceneRect().isEmpty()) {
+        setSceneRect(m_scene->sceneRect());
+    }
 
     applyTheme(false);
 }

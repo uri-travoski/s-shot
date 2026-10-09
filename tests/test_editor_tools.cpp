@@ -29,12 +29,14 @@
 #include <QMimeData>
 #include <QMenuBar>
 #include <QScrollBar>
+#include <QTextCursor>
 
 class TestScene : public CanvasScene {
 public:
     using CanvasScene::mousePressEvent;
     using CanvasScene::mouseMoveEvent;
     using CanvasScene::mouseReleaseEvent;
+    using CanvasScene::keyPressEvent;
 };
 
 class TestEditorTools : public QObject {
@@ -73,6 +75,7 @@ private slots:
     void testCrashHandlerAndLogging();
     void testPanToolAndCanvasResizeHandles();
     void testPasteImageOntoExistingCanvas();
+    void testTextEditingBackspaceAndDelete();
 };
 
 void TestEditorTools::initTestCase() {
@@ -1385,7 +1388,13 @@ void TestEditorTools::testPanToolAndCanvasResizeHandles() {
     // 6. Interactive mouse dragging of handle via TestScene
     TestScene testScene;
     QPixmap base(400, 300);
-    base.fill(Qt::white);
+    {
+        QPainter p(&base);
+        p.fillRect(0, 0, 200, 150, QColor(255, 0, 0));       // Top-Left: Red
+        p.fillRect(200, 0, 200, 150, QColor(0, 0, 255));     // Top-Right: Blue
+        p.fillRect(0, 150, 200, 150, QColor(0, 255, 0));     // Bottom-Left: Green
+        p.fillRect(200, 150, 200, 150, QColor(255, 255, 0)); // Bottom-Right: Yellow
+    }
     testScene.setBasePixmap(base);
     testScene.setCurrentTool(ToolType::Select);
 
@@ -1411,6 +1420,87 @@ void TestEditorTools::testPanToolAndCanvasResizeHandles() {
 
     QCOMPARE(testScene.activeHandle(), CanvasScene::CanvasHandle::None);
     QCOMPARE(testScene.basePixmap().width(), 450);
+    // Newly added canvas area on the right is white
+    QCOMPARE(testScene.basePixmap().toImage().pixelColor(425, 75), QColor(255, 255, 255));
+    // Original left area is preserved as Red
+    QCOMPARE(testScene.basePixmap().toImage().pixelColor(100, 75), QColor(255, 0, 0));
+
+    // 2. Test reducing canvas from Right handle (450 -> 350)
+    QPointF rightHandle2(450, 150);
+    pressEv.setScenePos(rightHandle2);
+    testScene.mousePressEvent(&pressEv);
+    QCOMPARE(testScene.activeHandle(), CanvasScene::CanvasHandle::Right);
+
+    moveEv.setScenePos(QPointF(350, 150));
+    testScene.mouseMoveEvent(&moveEv);
+
+    releaseEv.setScenePos(QPointF(350, 150));
+    testScene.mouseReleaseEvent(&releaseEv);
+    QCOMPARE(testScene.basePixmap().width(), 350);
+    // Left side (Red) is completely untouched
+    QCOMPARE(testScene.basePixmap().toImage().pixelColor(100, 75), QColor(255, 0, 0));
+    // Right side was reduced to 350 (retaining Blue part at 250)
+    QCOMPARE(testScene.basePixmap().toImage().pixelColor(250, 75), QColor(0, 0, 255));
+
+    // 3. Test reducing canvas from Left handle (crop 50px from left: 350 -> 300)
+    // Canvas should get smaller from the left: left 50px cropped, right preserved
+    QPointF leftHandle(0, 150);
+    pressEv.setScenePos(leftHandle);
+    testScene.mousePressEvent(&pressEv);
+    QCOMPARE(testScene.activeHandle(), CanvasScene::CanvasHandle::Left);
+
+    moveEv.setScenePos(QPointF(50, 150));
+    testScene.mouseMoveEvent(&moveEv);
+
+    releaseEv.setScenePos(QPointF(50, 150));
+    testScene.mouseReleaseEvent(&releaseEv);
+    QCOMPARE(testScene.basePixmap().width(), 300);
+    // The left 50px of Red was cropped: pixel at x=0 now corresponds to original x=50 (still Red)
+    QCOMPARE(testScene.basePixmap().toImage().pixelColor(0, 75), QColor(255, 0, 0));
+    // Red quadrant (originally 200px) now has width 150px (0..149).
+    QCOMPARE(testScene.basePixmap().toImage().pixelColor(149, 75), QColor(255, 0, 0));
+    // Blue quadrant starts at x=150.
+    QCOMPARE(testScene.basePixmap().toImage().pixelColor(150, 75), QColor(0, 0, 255));
+    // Far right edge at x=299 is still Blue (right was not cropped).
+    QCOMPARE(testScene.basePixmap().toImage().pixelColor(299, 75), QColor(0, 0, 255));
+
+    // 4. Test reducing canvas from Bottom handle (300 -> 250 height)
+    // Canvas should get smaller from the bottom: bottom 50px cropped, top preserved
+    QPointF bottomHandle(150, 300);
+    pressEv.setScenePos(bottomHandle);
+    testScene.mousePressEvent(&pressEv);
+    QCOMPARE(testScene.activeHandle(), CanvasScene::CanvasHandle::Bottom);
+
+    moveEv.setScenePos(QPointF(150, 250));
+    testScene.mouseMoveEvent(&moveEv);
+
+    releaseEv.setScenePos(QPointF(150, 250));
+    testScene.mouseReleaseEvent(&releaseEv);
+    QCOMPARE(testScene.basePixmap().height(), 250);
+    // Top is untouched (Red/Blue)
+    QCOMPARE(testScene.basePixmap().toImage().pixelColor(50, 75), QColor(255, 0, 0));
+    QCOMPARE(testScene.basePixmap().toImage().pixelColor(200, 75), QColor(0, 0, 255));
+    // Bottom area at y=200 is Green/Yellow
+    QCOMPARE(testScene.basePixmap().toImage().pixelColor(50, 200), QColor(0, 255, 0));
+    QCOMPARE(testScene.basePixmap().toImage().pixelColor(200, 200), QColor(255, 255, 0));
+
+    // 5. Test reducing canvas from Top handle (crop 40px from top: 250 -> 210 height)
+    // Canvas should get smaller from the top: top 40px cropped, bottom preserved
+    QPointF topHandle(150, 0);
+    pressEv.setScenePos(topHandle);
+    testScene.mousePressEvent(&pressEv);
+    QCOMPARE(testScene.activeHandle(), CanvasScene::CanvasHandle::Top);
+
+    moveEv.setScenePos(QPointF(150, 40));
+    testScene.mouseMoveEvent(&moveEv);
+
+    releaseEv.setScenePos(QPointF(150, 40));
+    testScene.mouseReleaseEvent(&releaseEv);
+    QCOMPARE(testScene.basePixmap().height(), 210);
+    // Top 40px was cropped. Top boundary at y=0 now corresponds to original y=40 (still Red)
+    QCOMPARE(testScene.basePixmap().toImage().pixelColor(50, 0), QColor(255, 0, 0));
+    // Bottom boundary at y=209 is still Yellow (bottom was not cropped)
+    QCOMPARE(testScene.basePixmap().toImage().pixelColor(200, 209), QColor(255, 255, 0));
 }
 
 void TestEditorTools::testPasteImageOntoExistingCanvas() {
@@ -1511,6 +1601,62 @@ void TestEditorTools::testPasteImageOntoExistingCanvas() {
     win.pasteAsNewImage();
     QTest::qWait(50);
     QCOMPARE(tabs->count(), 2);
+}
+
+void TestEditorTools::testTextEditingBackspaceAndDelete() {
+    TestScene scene;
+    QPixmap base(400, 300);
+    base.fill(Qt::white);
+    scene.setBasePixmap(base);
+
+    TextItem* txt = new TextItem("Hello", QPointF(50, 50));
+    scene.addItem(txt);
+    txt->startEditing();
+    QVERIFY(txt->isEditing());
+
+    // 1. Press Backspace while editing
+    // The cursor is at the end ("Hello|"). Backspace should delete 'o' -> "Hell"
+    QKeyEvent backspace(QEvent::KeyPress, Qt::Key_Backspace, Qt::NoModifier);
+    scene.keyPressEvent(&backspace);
+
+    // TextItem MUST NOT be deleted from the scene!
+    bool foundInScene = false;
+    for (auto* item : scene.items()) {
+        if (item == txt) foundInScene = true;
+    }
+    QVERIFY(foundInScene);
+    QCOMPARE(txt->toPlainText(), QString("Hell"));
+
+    // 2. Move cursor to before 'e' ("H|ell") and press Delete
+    QTextCursor c = txt->textCursor();
+    c.setPosition(1);
+    txt->setTextCursor(c);
+
+    QKeyEvent delKey(QEvent::KeyPress, Qt::Key_Delete, Qt::NoModifier);
+    scene.keyPressEvent(&delKey);
+
+    // TextItem MUST NOT be deleted! 'e' should be deleted -> "Hll"
+    foundInScene = false;
+    for (auto* item : scene.items()) {
+        if (item == txt) foundInScene = true;
+    }
+    QVERIFY(foundInScene);
+    QCOMPARE(txt->toPlainText(), QString("Hll"));
+
+    // 3. Finish editing and switch to select mode
+    txt->finishEditing();
+    QVERIFY(!txt->isEditing());
+    scene.setCurrentTool(ToolType::Select);
+    scene.clearSelection();
+    txt->setSelected(true);
+
+    // When NOT editing and selected, Delete key should remove the item
+    scene.keyPressEvent(&delKey);
+    foundInScene = false;
+    for (auto* item : scene.items()) {
+        if (item == txt) foundInScene = true;
+    }
+    QVERIFY(!foundInScene);
 }
 
 int main(int argc, char** argv) {

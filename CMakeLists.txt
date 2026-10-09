@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(s-shot
-    VERSION 1.30.0
+    VERSION 1.31.0
     DESCRIPTION "Lightweight Screenshot & Annotation Tool for Linux"
     LANGUAGES CXX
 )
@@ -127,7 +127,6 @@ install(TARGETS s-shot
 )
 
 install(FILES
-    resources/s-shot.desktop
     resources/io.github.uri_travoski.s-shot.desktop
     DESTINATION ${CMAKE_INSTALL_DATADIR}/applications
 )
