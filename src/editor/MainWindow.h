@@ -68,6 +68,7 @@ private slots:
     void onUndo();
     void onRedo();
     void onSceneSelectionChanged();
+    void onColorPickedFromScene(const QColor& color, bool isFill);
 
 private:
     bool maybeSaveTab(int index);
@@ -108,12 +109,15 @@ private:
     QAction* m_actBlur = nullptr;
     QAction* m_actBucket = nullptr;
     QAction* m_actCrop = nullptr;
+    QAction* m_actColorPicker = nullptr;
 
     // Property widgets
     QLabel* m_strokeLbl = nullptr;
     QPushButton* m_strokeColorBtn = nullptr;
     QLabel* m_fillLbl = nullptr;
     QPushButton* m_fillColorBtn = nullptr;
+    QLabel* m_colorPickerHelpLbl = nullptr;
+    QPushButton* m_pickFromScreenBtn = nullptr;
     QLabel* m_widthLbl = nullptr;
     QSpinBox* m_strokeWidthSpin = nullptr;
     QLabel* m_blurRadiusLbl = nullptr;
@@ -130,6 +134,8 @@ private:
     QAction* m_actStrokeColorBtn = nullptr;
     QAction* m_actFillLbl = nullptr;
     QAction* m_actFillColorBtn = nullptr;
+    QAction* m_actColorPickerHelpLbl = nullptr;
+    QAction* m_actPickFromScreenBtn = nullptr;
     QAction* m_actFontBtn = nullptr;
     QAction* m_actFontFamilyCombo = nullptr;
     QAction* m_actFontSizeLbl = nullptr;

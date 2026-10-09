@@ -62,6 +62,11 @@ MainWindow::MainWindow(QWidget* parent)
         activateWindow();
     });
 
+    // Update editor colors when screen color picker samples a color
+    connect(&CaptureManager::instance(), &CaptureManager::colorPicked, this, [this](const QColor& color, const QString& /*hex*/) {
+        onColorPickedFromScene(color, false);
+    });
+
     // Default blank tab on first open if no screenshot exists
     createBlankTab(800, 500);
 }
@@ -394,6 +399,17 @@ void MainWindow::setupToolbars() {
     connect(m_fillColorBtn, &QPushButton::clicked, this, &MainWindow::onSelectFillColor);
     m_actFillColorBtn = m_propToolBar->addWidget(m_fillColorBtn);
 
+    m_colorPickerHelpLbl = new QLabel(tr(" Left-click: Stroke | Right-click: Fill "), this);
+    m_actColorPickerHelpLbl = m_propToolBar->addWidget(m_colorPickerHelpLbl);
+
+    m_pickFromScreenBtn = new QPushButton(tr("🖥 Pick from Screen..."), this);
+    m_pickFromScreenBtn->setToolTip(tr("Pick color from anywhere on your desktop screen"));
+    m_pickFromScreenBtn->setStyleSheet("padding: 2px 8px; border: 1px solid #888; border-radius: 3px; font-size: 11px;");
+    connect(m_pickFromScreenBtn, &QPushButton::clicked, this, []() {
+        CaptureManager::instance().pickColor();
+    });
+    m_actPickFromScreenBtn = m_propToolBar->addWidget(m_pickFromScreenBtn);
+
     m_fontBtn = new QPushButton(tr("More..."), this);
     m_fontBtn->setStyleSheet("padding: 2px 6px; border: 1px solid #888; border-radius: 3px; font-size: 11px;");
     m_fontBtn->setToolTip(tr("Advanced font options"));
@@ -494,6 +510,8 @@ void MainWindow::setupToolbars() {
     m_actBadge = addToolAct("badge", tr("Number / Stepper Badge (1, 2, 3...)"), ToolType::Badge);
     m_actBlur = addToolAct("blur", tr("Blur / Pixelate Redaction"), ToolType::Blur);
     m_actBucket = addToolAct("bucket", tr("Fill Colour Bucket Tool"), ToolType::BucketFill);
+    m_actColorPicker = addToolAct("picker", tr("Colour Picker (Eyedropper) [I]"), ToolType::ColorPicker);
+    m_actColorPicker->setShortcut(QKeySequence(Qt::Key_I));
     m_actCrop = addToolAct("crop", tr("Crop Tool"), ToolType::Crop);
 
     updateToolPropertiesVisibility(ToolType::Pan);
@@ -534,6 +552,7 @@ void MainWindow::addImageTab(const QPixmap& pixmap, const QString& title) {
     scene->setCurrentFont(m_currentFont);
     connect(scene, &QGraphicsScene::selectionChanged, this, &MainWindow::onSceneSelectionChanged);
     connect(scene, &CanvasScene::badgeCounterChanged, this, &MainWindow::onBadgeCounterChanged);
+    connect(scene, &CanvasScene::colorPicked, this, &MainWindow::onColorPickedFromScene);
     connect(scene, &CanvasScene::sceneModified, this, [this, scene]() {
         QPixmap p = scene->basePixmap();
         if (m_statusDimensions) {
@@ -923,6 +942,53 @@ void MainWindow::onSelectFillColor() {
     }
 }
 
+void MainWindow::onColorPickedFromScene(const QColor& color, bool isFill) {
+    if (!color.isValid()) return;
+
+    QString hex = color.name().toUpper();
+    QGuiApplication::clipboard()->setText(hex);
+
+    if (isFill) {
+        m_currentFillColor = color;
+        m_fillColorBtn->setText("");
+        m_fillColorBtn->setStyleSheet(QString("background-color: %1; border: 1px solid #888; border-radius: 3px;").arg(hex));
+        updateToolProperties();
+        if (CanvasScene* scene = currentScene()) {
+            for (auto* item : scene->selectedItems()) {
+                if (auto* txt = dynamic_cast<TextItem*>(item)) {
+                    txt->setFillColor(color);
+                } else if (auto* shape = dynamic_cast<ShapeItem*>(item)) {
+                    shape->setFillColor(color);
+                }
+            }
+            emit scene->sceneModified();
+        }
+        statusBar()->showMessage(tr("Picked Fill Color: %1 (copied to clipboard)").arg(hex), 3500);
+    } else {
+        m_currentStrokeColor = color;
+        m_strokeColorBtn->setStyleSheet(QString("background-color: %1; border: 1px solid #888; border-radius: 3px;").arg(hex));
+        updateToolProperties();
+        if (CanvasScene* scene = currentScene()) {
+            for (auto* item : scene->selectedItems()) {
+                if (auto* txt = dynamic_cast<TextItem*>(item)) {
+                    txt->setStrokeColor(color);
+                } else if (auto* pen = dynamic_cast<PenItem*>(item)) {
+                    pen->setStrokeColor(color);
+                } else if (auto* arrow = dynamic_cast<ArrowItem*>(item)) {
+                    arrow->setStrokeColor(color);
+                } else if (auto* shape = dynamic_cast<ShapeItem*>(item)) {
+                    shape->setStrokeColor(color);
+                } else if (auto* badge = dynamic_cast<BadgeItem*>(item)) {
+                    badge->setStrokeColor(color);
+                    badge->setFillColor(color);
+                }
+            }
+            emit scene->sceneModified();
+        }
+        statusBar()->showMessage(tr("Picked Stroke Color: %1 (copied to clipboard)").arg(hex), 3500);
+    }
+}
+
 void MainWindow::onSelectFont() {
     bool ok = false;
     QFont f = QFontDialog::getFont(&ok, m_currentFont, this, tr("Select Font"));
@@ -1102,6 +1168,9 @@ void MainWindow::onSceneSelectionChanged() {
 
     // Inspect the primary selected item
     QGraphicsItem* item = sel.last();
+
+    if (m_actColorPickerHelpLbl) m_actColorPickerHelpLbl->setVisible(false);
+    if (m_actPickFromScreenBtn) m_actPickFromScreenBtn->setVisible(false);
 
     if (auto* blur = dynamic_cast<BlurItem*>(item)) {
         if (m_actStrokeLbl) m_actStrokeLbl->setVisible(false);
@@ -1308,13 +1377,16 @@ void MainWindow::updateToolProperties() {
 }
 
 void MainWindow::updateToolPropertiesVisibility(ToolType tool) {
+    bool isColorPicker = (tool == ToolType::ColorPicker);
     bool hasStroke = (tool == ToolType::Pen || tool == ToolType::Highlighter ||
                       tool == ToolType::Line || tool == ToolType::Arrow ||
                       tool == ToolType::DoubleArrow || tool == ToolType::Rectangle ||
                       tool == ToolType::Ellipse || tool == ToolType::Badge ||
-                      tool == ToolType::Text || tool == ToolType::BucketFill);
+                      tool == ToolType::Text || tool == ToolType::BucketFill ||
+                      isColorPicker);
     bool hasFill = (tool == ToolType::Rectangle || tool == ToolType::Ellipse ||
-                    tool == ToolType::Text || tool == ToolType::BucketFill);
+                    tool == ToolType::Text || tool == ToolType::BucketFill ||
+                    isColorPicker);
     bool hasWidth = (tool == ToolType::Pen || tool == ToolType::Highlighter ||
                      tool == ToolType::Line || tool == ToolType::Arrow ||
                      tool == ToolType::DoubleArrow || tool == ToolType::Rectangle ||
@@ -1333,6 +1405,10 @@ void MainWindow::updateToolPropertiesVisibility(ToolType tool) {
     }
     if (m_actFillLbl) m_actFillLbl->setVisible(hasFill);
     if (m_actFillColorBtn) m_actFillColorBtn->setVisible(hasFill);
+
+    if (m_actColorPickerHelpLbl) m_actColorPickerHelpLbl->setVisible(isColorPicker);
+    if (m_actPickFromScreenBtn) m_actPickFromScreenBtn->setVisible(isColorPicker);
+
     if (m_actFontBtn) m_actFontBtn->setVisible(isText);
     if (m_actFontFamilyCombo) m_actFontFamilyCombo->setVisible(isText);
     if (m_actFontSizeLbl) m_actFontSizeLbl->setVisible(isText);
@@ -1404,10 +1480,7 @@ void MainWindow::onCaptureRegion() {
 }
 
 void MainWindow::onColorPicker() {
-    hide();
-    QTimer::singleShot(250, this, []() {
-        CaptureManager::instance().pickColor();
-    });
+    selectTool(ToolType::ColorPicker);
 }
 
 void MainWindow::openSettingsDialog() {

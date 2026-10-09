@@ -305,6 +305,71 @@ QPixmap CanvasScene::renderToPixmap() const {
     return result;
 }
 
+QColor CanvasScene::colorAt(const QPointF& pos) const {
+    QRectF sr = sceneRect();
+    if (!sr.contains(pos)) {
+        if (!views().isEmpty()) {
+            return views().first()->backgroundBrush().color();
+        }
+        return QColor(36, 36, 36);
+    }
+
+    int px = qRound(pos.x());
+    int py = qRound(pos.y());
+
+    // 1. If pos is within base pixmap and has no annotations on top, read directly
+    if (m_basePixmapItem && !m_basePixmapItem->pixmap().isNull()) {
+        QRect imgRect = m_basePixmapItem->pixmap().rect();
+        if (imgRect.contains(px, py)) {
+            QList<QGraphicsItem*> itemsAtPos = items(pos);
+            bool hasAnnotations = false;
+            for (auto* it : itemsAtPos) {
+                if (!isSystemItem(it) && it != m_basePixmapItem) {
+                    hasAnnotations = true;
+                    break;
+                }
+            }
+            if (!hasAnnotations) {
+                return m_basePixmapItem->pixmap().toImage().pixelColor(px, py);
+            }
+        }
+    }
+
+    // 2. Render 1x1 pixel evaluating all items/annotations
+    QImage pixelImg(1, 1, QImage::Format_ARGB32_Premultiplied);
+    pixelImg.fill(Qt::transparent);
+    QPainter p(&pixelImg);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    p.setRenderHint(QPainter::SmoothPixmapTransform, true);
+    const_cast<CanvasScene*>(this)->render(&p, QRectF(0, 0, 1, 1), QRectF(pos.x(), pos.y(), 1, 1));
+    p.end();
+
+    QColor c = pixelImg.pixelColor(0, 0);
+    if (c.alpha() == 0 && m_basePixmapItem && !m_basePixmapItem->pixmap().isNull()) {
+        QRect imgRect = m_basePixmapItem->pixmap().rect();
+        if (imgRect.contains(px, py)) {
+            return m_basePixmapItem->pixmap().toImage().pixelColor(px, py);
+        }
+    }
+    return c;
+}
+
+QImage CanvasScene::imagePatch(const QPointF& centerPos, int span) const {
+    span = qMax(3, span);
+    QImage patch(span, span, QImage::Format_ARGB32_Premultiplied);
+    QColor bg = (!views().isEmpty()) ? views().first()->backgroundBrush().color() : QColor(36, 36, 36);
+    patch.fill(bg);
+    QPainter p(&patch);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    p.setRenderHint(QPainter::SmoothPixmapTransform, true);
+    int half = span / 2;
+    QRectF target(0, 0, span, span);
+    QRectF source(centerPos.x() - half, centerPos.y() - half, span, span);
+    const_cast<CanvasScene*>(this)->render(&p, target, source);
+    p.end();
+    return patch;
+}
+
 void CanvasScene::setCurrentTool(ToolType tool) {
     m_currentTool = tool;
     clearAreaSelection();
@@ -578,6 +643,19 @@ void CanvasScene::shiftAnnotationItems(const QPointF& offset) {
 }
 
 void CanvasScene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
+    if (m_currentTool == ToolType::ColorPicker) {
+        if (event->button() == Qt::LeftButton || event->button() == Qt::RightButton) {
+            m_startPoint = event->scenePos();
+            QColor col = colorAt(m_startPoint);
+            if (col.isValid()) {
+                bool isFill = (event->button() == Qt::RightButton);
+                emit colorPicked(col, isFill);
+            }
+            event->accept();
+            return;
+        }
+    }
+
     if (event->button() != Qt::LeftButton) {
         QGraphicsScene::mousePressEvent(event);
         return;
@@ -840,7 +918,7 @@ void CanvasScene::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
         }
     }
 
-    if (m_currentTool == ToolType::Pan) {
+    if (m_currentTool == ToolType::Pan || m_currentTool == ToolType::ColorPicker) {
         event->accept();
         return;
     }
@@ -861,6 +939,11 @@ void CanvasScene::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
 }
 
 void CanvasScene::mouseReleaseEvent(QGraphicsSceneMouseEvent* event) {
+    if (m_currentTool == ToolType::ColorPicker) {
+        event->accept();
+        return;
+    }
+
     if (event->button() == Qt::LeftButton) {
         if (m_isResizingCanvas) {
             m_isResizingCanvas = false;
@@ -1217,6 +1300,11 @@ void CanvasScene::modifyBadgeNumber(BadgeItem* badge, int newNumber) {
 }
 
 void CanvasScene::contextMenuEvent(QGraphicsSceneContextMenuEvent* event) {
+    if (m_currentTool == ToolType::ColorPicker) {
+        event->accept();
+        return;
+    }
+
     QGraphicsScene::contextMenuEvent(event);
     if (event->isAccepted()) {
         return;

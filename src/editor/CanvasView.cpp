@@ -3,6 +3,7 @@
 #include <QScrollBar>
 #include <QGraphicsPixmapItem>
 #include <QTimer>
+#include <QPainterPath>
 
 CanvasView::CanvasView(CanvasScene* scene, QWidget* parent)
     : QGraphicsView(scene, parent)
@@ -217,6 +218,13 @@ void CanvasView::updateToolCursor() {
     case ToolType::BucketFill:
         setCursor(Qt::PointingHandCursor);
         break;
+    case ToolType::ColorPicker:
+        setCursor(Qt::CrossCursor);
+        break;
+    }
+    if (m_scene && m_scene->currentTool() != ToolType::ColorPicker && m_showColorPickerLoupe) {
+        m_showColorPickerLoupe = false;
+        viewport()->update();
     }
 }
 
@@ -253,6 +261,16 @@ void CanvasView::mouseMoveEvent(QMouseEvent* event) {
 
     QPointF sPos = mapToScene(event->pos());
     emit mouseMovedTo(sPos.toPoint());
+
+    if (m_scene && m_scene->currentTool() == ToolType::ColorPicker) {
+        m_showColorPickerLoupe = true;
+        m_colorPickerPos = event->pos();
+        viewport()->update();
+    } else if (m_showColorPickerLoupe) {
+        m_showColorPickerLoupe = false;
+        viewport()->update();
+    }
+
     QGraphicsView::mouseMoveEvent(event);
 }
 
@@ -318,4 +336,120 @@ void CanvasView::updateFloatingBarPosition() {
     posY = qBound(10, posY, height() - barH - 10);
 
     m_areaActionWidget->move(posX, posY);
+}
+
+void CanvasView::leaveEvent(QEvent* event) {
+    if (m_showColorPickerLoupe) {
+        m_showColorPickerLoupe = false;
+        viewport()->update();
+    }
+    QGraphicsView::leaveEvent(event);
+}
+
+void CanvasView::paintEvent(QPaintEvent* event) {
+    QGraphicsView::paintEvent(event);
+
+    if (m_showColorPickerLoupe && m_scene && m_scene->currentTool() == ToolType::ColorPicker) {
+        QPainter p(viewport());
+        drawColorPickerLoupe(p, m_colorPickerPos);
+    }
+}
+
+void CanvasView::drawColorPickerLoupe(QPainter& p, const QPoint& viewPos) {
+    if (!m_scene) return;
+
+    p.setRenderHint(QPainter::Antialiasing, true);
+    p.setRenderHint(QPainter::SmoothPixmapTransform, false);
+
+    QPointF scPos = mapToScene(viewPos);
+    QColor sampledColor = m_scene->colorAt(scPos);
+    if (!sampledColor.isValid()) {
+        sampledColor = backgroundBrush().color();
+    }
+
+    const int span = 11;
+    QImage patch = m_scene->imagePatch(scPos, span);
+
+    const int loupeRadius = 42;
+    const int loupeSize = loupeRadius * 2;
+    int offsetX = 24;
+    int offsetY = -loupeSize - 20;
+
+    if (viewPos.x() + offsetX + loupeSize > viewport()->width() - 8) {
+        offsetX = -loupeSize - 24;
+    }
+    if (viewPos.y() + offsetY < 8) {
+        offsetY = 24;
+    }
+
+    QPoint center = viewPos + QPoint(offsetX + loupeRadius, offsetY + loupeRadius);
+    QRect loupeRect(center.x() - loupeRadius, center.y() - loupeRadius, loupeSize, loupeSize);
+
+    p.save();
+
+    // Outer shadow / subtle glow
+    p.setPen(QPen(QColor(0, 0, 0, 80), 3));
+    p.setBrush(Qt::NoBrush);
+    p.drawEllipse(loupeRect.adjusted(-1, -1, 1, 1));
+
+    // Circular clip
+    QPainterPath clipPath;
+    clipPath.addEllipse(loupeRect);
+    p.setClipPath(clipPath);
+
+    // Draw magnified patch
+    p.drawImage(loupeRect, patch);
+
+    // Draw grid over pixels
+    double step = static_cast<double>(loupeSize) / span;
+    p.setPen(QPen(QColor(255, 255, 255, 40), 1));
+    for (int i = 1; i < span; ++i) {
+        int pos = qRound(loupeRect.left() + i * step);
+        p.drawLine(pos, loupeRect.top(), pos, loupeRect.bottom());
+        pos = qRound(loupeRect.top() + i * step);
+        p.drawLine(loupeRect.left(), pos, loupeRect.right(), pos);
+    }
+
+    // Highlight center pixel
+    int centerIdx = span / 2;
+    QRectF centerPixelRect(loupeRect.left() + centerIdx * step,
+                           loupeRect.top() + centerIdx * step,
+                           step, step);
+    p.setPen(QPen(QColor(255, 255, 255, 220), 1.5));
+    p.setBrush(Qt::NoBrush);
+    p.drawRect(centerPixelRect);
+    p.setPen(QPen(QColor(0, 0, 0, 200), 1.0));
+    p.drawRect(centerPixelRect.adjusted(-1, -1, 1, 1));
+
+    p.restore();
+
+    // Draw loupe outer ring
+    p.setPen(QPen(QColor(255, 255, 255), 2.5));
+    p.setBrush(Qt::NoBrush);
+    p.drawEllipse(loupeRect);
+    p.setPen(QPen(QColor(40, 40, 40, 180), 1.0));
+    p.drawEllipse(loupeRect.adjusted(1, 1, -1, -1));
+
+    // Draw color info badge below loupe
+    QString hexStr = sampledColor.name().toUpper();
+    QRect infoRect(center.x() - 44, loupeRect.bottom() + 4, 88, 20);
+
+    // Pill background
+    p.setPen(QPen(QColor(255, 255, 255, 120), 1));
+    p.setBrush(QColor(24, 24, 24, 230));
+    p.drawRoundedRect(infoRect, 4, 4);
+
+    // Color swatch
+    QRect swatchRect(infoRect.left() + 4, infoRect.top() + 3, 14, 14);
+    p.setPen(QPen(QColor(200, 200, 200), 1));
+    p.setBrush(sampledColor);
+    p.drawRect(swatchRect);
+
+    // Hex text
+    p.setPen(Qt::white);
+    QFont font("Monospace", 9, QFont::Bold);
+    font.setStyleHint(QFont::Monospace);
+    p.setFont(font);
+    p.drawText(QRect(infoRect.left() + 22, infoRect.top(), infoRect.width() - 24, infoRect.height()),
+               Qt::AlignVCenter | Qt::AlignLeft, hexStr);
 }

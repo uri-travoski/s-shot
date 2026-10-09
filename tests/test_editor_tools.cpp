@@ -77,6 +77,7 @@ private slots:
     void testPasteImageOntoExistingCanvas();
     void testTextEditingBackspaceAndDelete();
     void testCanvasViewScrollbarsWhenZoomed();
+    void testColorPickerTool();
 };
 
 void TestEditorTools::initTestCase() {
@@ -1744,6 +1745,104 @@ void TestEditorTools::testCanvasViewScrollbarsWhenZoomed() {
     win.applyTheme("Light");
     QApplication::processEvents();
     win.grab().save("/home/owner/distrobox-homes/devbox/.gemini/antigravity/brain/e77fcd3f-2a52-4f22-843d-d82ecd75f998/test_scrollbars_light_win.png");
+}
+
+void TestEditorTools::testColorPickerTool() {
+    // 1. Test CanvasScene color sampling & signals
+    TestScene scene;
+    QImage baseImg(200, 200, QImage::Format_ARGB32_Premultiplied);
+    baseImg.fill(QColor(255, 0, 0)); // Top half red
+    QPainter p(&baseImg);
+    p.fillRect(0, 100, 200, 100, QColor(0, 0, 255)); // Bottom half blue
+    p.end();
+
+    scene.setBasePixmap(QPixmap::fromImage(baseImg));
+    scene.setCurrentTool(ToolType::ColorPicker);
+
+    // Pixel exact reading from base pixmap
+    QColor sampledRed = scene.colorAt(QPointF(50, 50));
+    QCOMPARE(sampledRed.name().toUpper(), QString("#FF0000"));
+
+    QColor sampledBlue = scene.colorAt(QPointF(50, 150));
+    QCOMPARE(sampledBlue.name().toUpper(), QString("#0000FF"));
+
+    // Magnifying patch test
+    QImage patch = scene.imagePatch(QPointF(50, 50), 11);
+    QCOMPARE(patch.size(), QSize(11, 11));
+    QCOMPARE(patch.pixelColor(5, 5).name().toUpper(), QString("#FF0000"));
+
+    // Test mouse press signal: Left click -> Stroke color
+    QColor pickedColor;
+    bool pickedIsFill = false;
+    QObject::connect(&scene, &CanvasScene::colorPicked, [&](const QColor& c, bool isFill) {
+        pickedColor = c;
+        pickedIsFill = isFill;
+    });
+
+    QGraphicsSceneMouseEvent leftClick(QEvent::GraphicsSceneMousePress);
+    leftClick.setScenePos(QPointF(50, 50));
+    leftClick.setButton(Qt::LeftButton);
+    scene.mousePressEvent(&leftClick);
+
+    QCOMPARE(pickedColor.name().toUpper(), QString("#FF0000"));
+    QCOMPARE(pickedIsFill, false);
+
+    // Test mouse press signal: Right click -> Fill color
+    QGraphicsSceneMouseEvent rightClick(QEvent::GraphicsSceneMousePress);
+    rightClick.setScenePos(QPointF(50, 150));
+    rightClick.setButton(Qt::RightButton);
+    scene.mousePressEvent(&rightClick);
+
+    QCOMPARE(pickedColor.name().toUpper(), QString("#0000FF"));
+    QCOMPARE(pickedIsFill, true);
+
+    // Test sampling overlay annotation
+    ShapeItem* rectItem = new ShapeItem(false);
+    rectItem->setRect(QRectF(10, 10, 80, 80));
+    rectItem->setFillColor(QColor(0, 255, 0));
+    rectItem->setStrokeColor(QColor(0, 255, 0));
+    scene.addItem(rectItem);
+
+    QColor annotationColor = scene.colorAt(QPointF(40, 40));
+    QCOMPARE(annotationColor.name().toUpper(), QString("#00FF00"));
+
+    // 2. Test CanvasView loupe rendering and cursor
+    CanvasView view(&scene);
+    view.resize(300, 300);
+    view.show();
+    view.updateToolCursor();
+    QCOMPARE(view.cursor().shape(), Qt::CrossCursor);
+
+    // 3. Test MainWindow integration
+    MainWindow win;
+    win.resize(900, 700);
+    win.show();
+    win.addImageTab(QPixmap::fromImage(baseImg), "ColorPickerTest");
+    QApplication::processEvents();
+
+    // Select color picker tool
+    win.onColorPicker();
+    QApplication::processEvents();
+
+    CanvasView* curView = win.currentView();
+    QVERIFY(curView != nullptr);
+    QCOMPARE(curView->canvasScene()->currentTool(), ToolType::ColorPicker);
+
+    // Trigger picking a color
+    QPoint clickPoint = curView->mapFromScene(QPointF(50, 50));
+    QTest::mouseClick(curView->viewport(), Qt::LeftButton, Qt::NoModifier, clickPoint);
+    QApplication::processEvents();
+
+    // Verify clipboard was updated with hex
+    QCOMPARE(QGuiApplication::clipboard()->text(), QString("#FF0000"));
+
+    // Simulate hover with mouse move to render magnifying loupe
+    QPoint hoverPoint = curView->mapFromScene(QPointF(50, 50));
+    QTest::mouseMove(curView->viewport(), hoverPoint);
+    QApplication::processEvents();
+    curView->viewport()->grab().save("/home/owner/distrobox-homes/devbox/.gemini/antigravity/brain/e77fcd3f-2a52-4f22-843d-d82ecd75f998/color_picker_loupe_preview.png");
+
+    win.grab().save("/home/owner/distrobox-homes/devbox/.gemini/antigravity/brain/e77fcd3f-2a52-4f22-843d-d82ecd75f998/color_picker_tool_preview.png");
 }
 
 int main(int argc, char** argv) {

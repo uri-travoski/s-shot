@@ -34,6 +34,8 @@ protected:
     void mouseReleaseEvent(QMouseEvent* event) override;
     void showEvent(QShowEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
+    void paintEvent(QPaintEvent* event) override;
+    void leaveEvent(QEvent* event) override;
 
 private slots:
     void onAreaSelectionChanged(const QRectF& area, bool active);
@@ -42,12 +44,16 @@ private:
     void applyZoom(qreal factor);
     void updateFloatingBarPosition();
     void updateViewSceneRect();
+    void drawColorPickerLoupe(QPainter& p, const QPoint& viewPos);
 
     CanvasScene* m_scene = nullptr;
     qreal m_zoomFactor = 1.0;
     bool m_initialFitDone = false;
     bool m_isPanning = false;
     QPoint m_panStart;
+
+    bool m_showColorPickerLoupe = false;
+    QPoint m_colorPickerPos;
 
     QWidget* m_areaActionWidget = nullptr;
     QPushButton* m_copyBtn = nullptr;

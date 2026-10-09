@@ -65,6 +65,8 @@ public:
     void cropToArea(const QRectF& rect);
     void cropToSelectedArea();
     void pasteImage(const QPixmap& pix, const QPointF& pos = QPointF());
+    QColor colorAt(const QPointF& pos) const;
+    QImage imagePatch(const QPointF& centerPos, int span = 11) const;
 
     // Canvas edge resize handles
     enum class CanvasHandle {
@@ -93,6 +95,7 @@ signals:
     void sceneModified();
     void toolActionCompleted();
     void badgeCounterChanged(int nextNumber);
+    void colorPicked(const QColor& color, bool isFill);
 
 protected:
     void mousePressEvent(QGraphicsSceneMouseEvent* event) override;

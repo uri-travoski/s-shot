@@ -14,5 +14,6 @@ enum class ToolType {
     Badge,
     Blur,
     BucketFill,
+    ColorPicker,
     Crop
 };
