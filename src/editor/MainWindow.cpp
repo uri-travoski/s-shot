@@ -500,6 +500,7 @@ void MainWindow::addImageTab(const QPixmap& pixmap, const QString& title) {
 
     CanvasScene* scene = new CanvasScene(this);
     scene->setBasePixmap(pixmap);
+    scene->setModified(false);
     scene->setStrokeColor(m_currentStrokeColor);
     scene->setFillColor(m_currentFillColor);
     scene->setStrokeWidth(m_currentStrokeWidth);
@@ -699,6 +700,7 @@ bool MainWindow::saveTab(int index) {
 
     QPixmap outPix = scene->renderToPixmap();
     if (outPix.save(fullPath)) {
+        scene->setModified(false);
         statusBar()->showMessage(tr("Saved to %1").arg(fullPath), 3000);
         m_tabWidget->setTabText(index, fileName);
         return true;
@@ -709,6 +711,7 @@ bool MainWindow::saveTab(int index) {
             return false;
         }
         if (outPix.save(path)) {
+            scene->setModified(false);
             QFileInfo fi(path);
             statusBar()->showMessage(tr("Saved to %1").arg(path), 3000);
             m_tabWidget->setTabText(index, fi.fileName());
@@ -720,6 +723,11 @@ bool MainWindow::saveTab(int index) {
 
 bool MainWindow::maybeSaveTab(int index) {
     if (index < 0 || index >= m_tabWidget->count()) return true;
+
+    CanvasView* v = qobject_cast<CanvasView*>(m_tabWidget->widget(index));
+    if (v && v->canvasScene() && !v->canvasScene()->isModified()) {
+        return true; // Not modified, close immediately without prompting!
+    }
 
     QString tabTitle = m_tabWidget->tabText(index);
     QMessageBox::StandardButton res = QMessageBox::question(

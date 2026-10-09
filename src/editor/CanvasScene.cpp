@@ -585,17 +585,19 @@ void CanvasScene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
 
     m_startPoint = event->scenePos();
 
-    // 1. Check if an edge resize handle was clicked
-    CanvasHandle h = handleAt(m_startPoint);
-    if (h != CanvasHandle::None) {
-        m_activeHandle = h;
-        m_isResizingCanvas = true;
-        m_resizeOriginalRect = m_basePixmapItem->pixmap().rect();
-        m_canvasResizeGuideItem->setRect(m_resizeOriginalRect);
-        m_canvasResizeGuideItem->setVisible(true);
-        if (m_canvasFrameItem) m_canvasFrameItem->update();
-        event->accept();
-        return;
+    // 1. Check if an edge resize handle was clicked (only active in Select and Pan tools)
+    if (m_currentTool == ToolType::Select || m_currentTool == ToolType::Pan) {
+        CanvasHandle h = handleAt(m_startPoint);
+        if (h != CanvasHandle::None) {
+            m_activeHandle = h;
+            m_isResizingCanvas = true;
+            m_resizeOriginalRect = m_basePixmapItem->pixmap().rect();
+            m_canvasResizeGuideItem->setRect(m_resizeOriginalRect);
+            m_canvasResizeGuideItem->setVisible(true);
+            if (m_canvasFrameItem) m_canvasFrameItem->update();
+            event->accept();
+            return;
+        }
     }
 
     // 2. Pan tool: CanvasView handles viewport panning
@@ -818,8 +820,8 @@ void CanvasScene::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
         return;
     }
 
-    // Handle hover tracking
-    if (!m_isDrawing && !m_isSelectingArea) {
+    // Handle hover tracking (only for Select or Pan tools)
+    if (!m_isDrawing && !m_isSelectingArea && (m_currentTool == ToolType::Select || m_currentTool == ToolType::Pan)) {
         CanvasHandle h = handleAt(event->scenePos());
         if (h != m_hoveredHandle) {
             m_hoveredHandle = h;

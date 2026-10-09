@@ -26,6 +26,8 @@ public:
     QPixmap renderToPixmap() const;
 
     QUndoStack* undoStack() { return &m_undoStack; }
+    bool isModified() const { return !m_undoStack.isClean(); }
+    void setModified(bool mod) { if (!mod) m_undoStack.setClean(); }
 
     ToolType currentTool() const { return m_currentTool; }
     void setCurrentTool(ToolType tool);
