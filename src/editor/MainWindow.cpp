@@ -111,6 +111,19 @@ void MainWindow::applyTheme(const QString& theme) {
             "QStatusBar { background-color: #d6d6d6; color: #333333; border-top: 1px solid #bfbfbf; }"
             "QLabel { color: #222222; }"
             "QSpinBox { background-color: #ffffff; color: #222222; border: 1px solid #b0b0b0; border-radius: 3px; padding: 2px 4px; }"
+            "QScrollBar:horizontal { background: #d6d6d6; height: 12px; margin: 0px; border: none; }"
+            "QScrollBar::handle:horizontal { background: #b0b0b0; min-width: 24px; border-radius: 4px; margin: 2px; }"
+            "QScrollBar::handle:horizontal:hover { background: #959595; }"
+            "QScrollBar::handle:horizontal:pressed { background: #7c7c7c; }"
+            "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; background: none; border: none; }"
+            "QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background: none; }"
+            "QScrollBar:vertical { background: #d6d6d6; width: 12px; margin: 0px; border: none; }"
+            "QScrollBar::handle:vertical { background: #b0b0b0; min-height: 24px; border-radius: 4px; margin: 2px; }"
+            "QScrollBar::handle:vertical:hover { background: #959595; }"
+            "QScrollBar::handle:vertical:pressed { background: #7c7c7c; }"
+            "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; background: none; border: none; }"
+            "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: none; }"
+            "QScrollBar::corner { background: #d6d6d6; border: none; }"
         );
         m_newTabBtn->setStyleSheet("QPushButton { font-weight: bold; font-size: 14px; background: transparent; color: #444444; border: none; padding: 4px 10px; } QPushButton:hover { background: #cccccc; border-radius: 4px; }");
         if (m_resetBadgeBtn) {
@@ -139,6 +152,19 @@ void MainWindow::applyTheme(const QString& theme) {
             "QStatusBar { background-color: #1e1e1e; color: #999999; border-top: 1px solid #333333; }"
             "QLabel { color: #e0e0e0; }"
             "QSpinBox { background-color: #383838; color: #ffffff; border: 1px solid #555555; border-radius: 3px; padding: 2px 4px; }"
+            "QScrollBar:horizontal { background: #202020; height: 12px; margin: 0px; border: none; }"
+            "QScrollBar::handle:horizontal { background: #484848; min-width: 24px; border-radius: 4px; margin: 2px; }"
+            "QScrollBar::handle:horizontal:hover { background: #606060; }"
+            "QScrollBar::handle:horizontal:pressed { background: #787878; }"
+            "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; background: none; border: none; }"
+            "QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background: none; }"
+            "QScrollBar:vertical { background: #202020; width: 12px; margin: 0px; border: none; }"
+            "QScrollBar::handle:vertical { background: #484848; min-height: 24px; border-radius: 4px; margin: 2px; }"
+            "QScrollBar::handle:vertical:hover { background: #606060; }"
+            "QScrollBar::handle:vertical:pressed { background: #787878; }"
+            "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; background: none; border: none; }"
+            "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: none; }"
+            "QScrollBar::corner { background: #202020; border: none; }"
         );
         m_newTabBtn->setStyleSheet("QPushButton { font-weight: bold; font-size: 14px; background: transparent; color: #cccccc; border: none; padding: 4px 10px; } QPushButton:hover { background: #383838; border-radius: 4px; }");
         if (m_resetBadgeBtn) {

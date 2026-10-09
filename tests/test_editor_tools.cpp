@@ -76,6 +76,7 @@ private slots:
     void testPanToolAndCanvasResizeHandles();
     void testPasteImageOntoExistingCanvas();
     void testTextEditingBackspaceAndDelete();
+    void testCanvasViewScrollbarsWhenZoomed();
 };
 
 void TestEditorTools::initTestCase() {
@@ -1657,6 +1658,92 @@ void TestEditorTools::testTextEditingBackspaceAndDelete() {
         if (item == txt) foundInScene = true;
     }
     QVERIFY(!foundInScene);
+}
+
+void TestEditorTools::testCanvasViewScrollbarsWhenZoomed() {
+    TestScene scene;
+    QPixmap pix(800, 600);
+    pix.fill(Qt::white);
+    scene.setBasePixmap(pix);
+
+    CanvasView view(&scene);
+    view.resize(500, 400);
+    view.show();
+    QApplication::processEvents();
+
+    // At zoom fit, image fits within viewport so scrollbars should not be needed
+    view.zoomFit();
+    QApplication::processEvents();
+    QVERIFY(!view.horizontalScrollBar()->isVisible() || view.horizontalScrollBar()->maximum() <= 0);
+    QVERIFY(!view.verticalScrollBar()->isVisible() || view.verticalScrollBar()->maximum() <= 0);
+
+    // Zoom in beyond viewport
+    for (int i = 0; i < 4; ++i) {
+        view.zoomIn();
+    }
+    QApplication::processEvents();
+
+    // Scrollbars must now be visible with positive scrolling range
+    QVERIFY(view.horizontalScrollBar()->isVisible());
+    QVERIFY(view.verticalScrollBar()->isVisible());
+    QVERIFY(view.horizontalScrollBar()->maximum() > view.horizontalScrollBar()->minimum());
+    QVERIFY(view.verticalScrollBar()->maximum() > view.verticalScrollBar()->minimum());
+
+    // Test scrolling to the maximum limit
+    int maxHVal = view.horizontalScrollBar()->maximum();
+    view.horizontalScrollBar()->setValue(maxHVal);
+    QCOMPARE(view.horizontalScrollBar()->value(), maxHVal);
+
+    int maxVVal = view.verticalScrollBar()->maximum();
+    view.verticalScrollBar()->setValue(maxVVal);
+    QCOMPARE(view.verticalScrollBar()->value(), maxVVal);
+
+    // Test editing tool while scrolled (e.g. Pen drawing)
+    scene.setCurrentTool(ToolType::Pen);
+    QPointF startScrolledScenePos = view.mapToScene(QPoint(100, 100));
+    QGraphicsSceneMouseEvent press(QEvent::GraphicsSceneMousePress);
+    press.setScenePos(startScrolledScenePos);
+    press.setButton(Qt::LeftButton);
+    scene.mousePressEvent(&press);
+
+    QGraphicsSceneMouseEvent move(QEvent::GraphicsSceneMouseMove);
+    move.setScenePos(startScrolledScenePos + QPointF(50, 50));
+    move.setButton(Qt::LeftButton);
+    scene.mouseMoveEvent(&move);
+
+    QGraphicsSceneMouseEvent release(QEvent::GraphicsSceneMouseRelease);
+    release.setScenePos(startScrolledScenePos + QPointF(50, 50));
+    release.setButton(Qt::LeftButton);
+    scene.mouseReleaseEvent(&release);
+
+    QVERIFY(scene.undoStack()->canUndo());
+
+    // Test MainWindow integration with zoomed image and scrollbars
+    MainWindow win;
+    win.resize(900, 700);
+    win.show();
+    QPixmap testPix(1200, 900);
+    testPix.fill(QColor(60, 60, 60));
+    win.addImageTab(testPix, "ScrollbarTest");
+    QApplication::processEvents();
+
+    CanvasView* winView = win.currentView();
+    QVERIFY(winView != nullptr);
+
+    // Zoom in 4 times
+    for (int i = 0; i < 4; ++i) {
+        winView->zoomIn();
+    }
+    QApplication::processEvents();
+
+    QVERIFY(winView->horizontalScrollBar()->isVisible());
+    QVERIFY(winView->verticalScrollBar()->isVisible());
+    win.grab().save("/home/owner/distrobox-homes/devbox/.gemini/antigravity/brain/e77fcd3f-2a52-4f22-843d-d82ecd75f998/test_scrollbars_win.png");
+
+    // Test Light Theme scrollbar styling
+    win.applyTheme("Light");
+    QApplication::processEvents();
+    win.grab().save("/home/owner/distrobox-homes/devbox/.gemini/antigravity/brain/e77fcd3f-2a52-4f22-843d-d82ecd75f998/test_scrollbars_light_win.png");
 }
 
 int main(int argc, char** argv) {

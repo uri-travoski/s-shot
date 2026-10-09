@@ -14,7 +14,8 @@ CanvasView::CanvasView(CanvasScene* scene, QWidget* parent)
     setMouseTracking(true);
     setTransformationAnchor(QGraphicsView::AnchorUnderMouse);
     setResizeAnchor(QGraphicsView::AnchorUnderMouse);
-    setStyleSheet("border: none;");
+    setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 
     m_areaActionWidget = new QWidget(this);
     QHBoxLayout* actLayout = new QHBoxLayout(m_areaActionWidget);
@@ -42,20 +43,54 @@ CanvasView::CanvasView(CanvasScene* scene, QWidget* parent)
     m_areaActionWidget->hide();
 
     connect(m_scene, &CanvasScene::areaSelectionChanged, this, &CanvasView::onAreaSelectionChanged);
-    connect(m_scene, &QGraphicsScene::sceneRectChanged, this, [this](const QRectF& rect) {
-        setSceneRect(rect);
+    connect(m_scene, &QGraphicsScene::sceneRectChanged, this, [this](const QRectF&) {
+        updateViewSceneRect();
         viewport()->update();
     });
     if (!m_scene->sceneRect().isEmpty()) {
-        setSceneRect(m_scene->sceneRect());
+        updateViewSceneRect();
     }
 
     applyTheme(false);
 }
 
+void CanvasView::updateViewSceneRect() {
+    if (!m_scene) return;
+    QRectF scRect = m_scene->sceneRect();
+    if (scRect.isEmpty()) return;
+
+    qreal scaledW = scRect.width() * m_zoomFactor;
+    qreal scaledH = scRect.height() * m_zoomFactor;
+    bool exceedsW = scaledW > viewport()->width();
+    bool exceedsH = scaledH > viewport()->height();
+
+    if (exceedsW || exceedsH) {
+        const qreal margin = 64.0;
+        setSceneRect(scRect.adjusted(-margin, -margin, margin, margin));
+    } else {
+        setSceneRect(scRect);
+    }
+}
+
 void CanvasView::applyTheme(bool isLight) {
     if (isLight) {
         setBackgroundBrush(QBrush(QColor(185, 185, 185)));
+        setStyleSheet(
+            "QGraphicsView { border: none; background-color: #b9b9b9; }"
+            "QScrollBar:horizontal { background: #d6d6d6; height: 12px; margin: 0px; border: none; }"
+            "QScrollBar::handle:horizontal { background: #b0b0b0; min-width: 24px; border-radius: 4px; margin: 2px; }"
+            "QScrollBar::handle:horizontal:hover { background: #959595; }"
+            "QScrollBar::handle:horizontal:pressed { background: #7c7c7c; }"
+            "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; background: none; border: none; }"
+            "QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background: none; }"
+            "QScrollBar:vertical { background: #d6d6d6; width: 12px; margin: 0px; border: none; }"
+            "QScrollBar::handle:vertical { background: #b0b0b0; min-height: 24px; border-radius: 4px; margin: 2px; }"
+            "QScrollBar::handle:vertical:hover { background: #959595; }"
+            "QScrollBar::handle:vertical:pressed { background: #7c7c7c; }"
+            "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; background: none; border: none; }"
+            "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: none; }"
+            "QScrollBar::corner { background: #d6d6d6; border: none; }"
+        );
         m_areaActionWidget->setStyleSheet(
             "QWidget { background-color: #e4e4e4; border: 1px solid #bbbbbb; border-radius: 6px; padding: 2px; }"
             "QPushButton { background-color: #ffffff; color: #222222; border: 1px solid #c0c0c0; border-radius: 4px; padding: 4px 8px; font-weight: bold; font-size: 11px; }"
@@ -63,6 +98,22 @@ void CanvasView::applyTheme(bool isLight) {
         );
     } else {
         setBackgroundBrush(QBrush(QColor(36, 36, 36)));
+        setStyleSheet(
+            "QGraphicsView { border: none; background-color: #242424; }"
+            "QScrollBar:horizontal { background: #202020; height: 12px; margin: 0px; border: none; }"
+            "QScrollBar::handle:horizontal { background: #484848; min-width: 24px; border-radius: 4px; margin: 2px; }"
+            "QScrollBar::handle:horizontal:hover { background: #606060; }"
+            "QScrollBar::handle:horizontal:pressed { background: #787878; }"
+            "QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; background: none; border: none; }"
+            "QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background: none; }"
+            "QScrollBar:vertical { background: #202020; width: 12px; margin: 0px; border: none; }"
+            "QScrollBar::handle:vertical { background: #484848; min-height: 24px; border-radius: 4px; margin: 2px; }"
+            "QScrollBar::handle:vertical:hover { background: #606060; }"
+            "QScrollBar::handle:vertical:pressed { background: #787878; }"
+            "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; background: none; border: none; }"
+            "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: none; }"
+            "QScrollBar::corner { background: #202020; border: none; }"
+        );
         m_areaActionWidget->setStyleSheet(
             "QWidget { background-color: #2b2b2b; border: 1px solid #484848; border-radius: 6px; padding: 2px; }"
             "QPushButton { background-color: #383838; color: #ffffff; border: 1px solid #505050; border-radius: 4px; padding: 4px 8px; font-weight: bold; font-size: 11px; }"
@@ -76,6 +127,7 @@ void CanvasView::applyZoom(qreal factor) {
     factor = qBound(0.1, factor, 10.0);
     if (qFuzzyCompare(factor, m_zoomFactor)) return;
     m_zoomFactor = factor;
+    updateViewSceneRect();
     setTransform(QTransform::fromScale(m_zoomFactor, m_zoomFactor));
     updateFloatingBarPosition();
     emit zoomChanged(m_zoomFactor);
@@ -103,25 +155,34 @@ void CanvasView::zoomFit() {
 }
 
 void CanvasView::wheelEvent(QWheelEvent* event) {
-    if (event->angleDelta().y() == 0) {
+    if (event->angleDelta().y() == 0 && event->angleDelta().x() == 0) {
         event->accept();
         return;
     }
 
-    QPointF mousePos = event->position();
-    QPointF scenePos = mapToScene(mousePos.toPoint());
+    if (event->modifiers() & Qt::ShiftModifier) {
+        int delta = event->angleDelta().y() != 0 ? event->angleDelta().y() : event->angleDelta().x();
+        horizontalScrollBar()->setValue(horizontalScrollBar()->value() - delta);
+        event->accept();
+        return;
+    }
 
-    qreal factor = (event->angleDelta().y() > 0) ? 1.25 : (1.0 / 1.25);
-    qreal newZoom = qBound(0.1, m_zoomFactor * factor, 10.0);
-    if (!qFuzzyCompare(newZoom, m_zoomFactor)) {
-        m_zoomFactor = newZoom;
-        setTransform(QTransform::fromScale(m_zoomFactor, m_zoomFactor));
-        QPointF newMousePos = mapFromScene(scenePos);
-        QPointF delta = newMousePos - mousePos;
-        horizontalScrollBar()->setValue(horizontalScrollBar()->value() + delta.x());
-        verticalScrollBar()->setValue(verticalScrollBar()->value() + delta.y());
-        updateFloatingBarPosition();
-        emit zoomChanged(m_zoomFactor);
+    if (event->angleDelta().y() != 0) {
+        QPointF mousePos = event->position();
+        QPointF scenePos = mapToScene(mousePos.toPoint());
+
+        qreal factor = (event->angleDelta().y() > 0) ? 1.25 : (1.0 / 1.25);
+        qreal newZoom = qBound(0.1, m_zoomFactor * factor, 10.0);
+        if (!qFuzzyCompare(newZoom, m_zoomFactor)) {
+            m_zoomFactor = newZoom;
+            setTransform(QTransform::fromScale(m_zoomFactor, m_zoomFactor));
+            QPointF newMousePos = mapFromScene(scenePos);
+            QPointF delta = newMousePos - mousePos;
+            horizontalScrollBar()->setValue(horizontalScrollBar()->value() + delta.x());
+            verticalScrollBar()->setValue(verticalScrollBar()->value() + delta.y());
+            updateFloatingBarPosition();
+            emit zoomChanged(m_zoomFactor);
+        }
     }
     event->accept();
 }
@@ -218,6 +279,7 @@ void CanvasView::showEvent(QShowEvent* event) {
 
 void CanvasView::resizeEvent(QResizeEvent* event) {
     QGraphicsView::resizeEvent(event);
+    updateViewSceneRect();
     if (!m_initialFitDone && viewport()->width() > 50 && viewport()->height() > 50) {
         m_initialFitDone = true;
         QTimer::singleShot(0, this, [this]() {

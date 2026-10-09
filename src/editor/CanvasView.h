@@ -41,6 +41,7 @@ private slots:
 private:
     void applyZoom(qreal factor);
     void updateFloatingBarPosition();
+    void updateViewSceneRect();
 
     CanvasScene* m_scene = nullptr;
     qreal m_zoomFactor = 1.0;
