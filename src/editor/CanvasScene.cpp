@@ -196,9 +196,9 @@ public:
             QColor fillCol = isHot ? QColor(48, 229, 0) : QColor(255, 255, 255);
             QColor strokeCol = isHot ? QColor(20, 120, 0) : QColor(50, 50, 50);
 
-            painter->setPen(QPen(strokeCol, 1.2));
+            painter->setPen(QPen(strokeCol, 1.0));
             painter->setBrush(fillCol);
-            painter->drawRoundedRect(hr, 2, 2);
+            painter->drawRect(hr);
         }
     }
 
@@ -478,7 +478,7 @@ QRectF CanvasScene::handleRect(CanvasHandle h) const {
     if (r.isEmpty() && m_basePixmapItem) {
         r = m_basePixmapItem->pixmap().rect();
     }
-    qreal s = 9.0;
+    qreal s = 5.0;
     qreal half = s / 2.0;
     qreal w = r.width();
     qreal hgt = r.height();
@@ -506,7 +506,7 @@ CanvasScene::CanvasHandle CanvasScene::handleAt(const QPointF& pos) const {
         CanvasHandle::Left, CanvasHandle::Right
     };
 
-    const qreal hitRadius = 3.0;
+    const qreal hitRadius = 5.0;
     for (CanvasHandle h : allHandles) {
         QRectF hr = handleRect(h);
         QRectF hitZone = hr.adjusted(-hitRadius, -hitRadius, hitRadius, hitRadius);
