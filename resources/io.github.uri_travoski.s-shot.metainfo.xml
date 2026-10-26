@@ -44,6 +44,11 @@
   </screenshots>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.34" date="2026-10-26">
+      <description>
+        <p>Photoshop toolbar icons across dark and light themes, including the iconic marquee selection tool, calligraphy fountain pen nib, water droplet blur tool, tilted paint bucket, eyedropper pipette, and classic serif type tool.</p>
+      </description>
+    </release>
     <release version="1.33" date="2026-10-26">
       <description>
         <p>Pasted image resizing with 8 edge and corner handles, Photoshop-style crop workflow with interactive adjustments and rule-of-thirds grid, canvas-bounded annotations restricting writing and drawing to the image canvas, and 10% smaller system tray icon.</p>

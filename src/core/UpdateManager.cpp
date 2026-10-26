@@ -22,7 +22,7 @@ UpdateManager::UpdateManager(QObject* parent)
 QString UpdateManager::currentVersion() const {
     QString ver = QCoreApplication::applicationVersion();
     if (ver.isEmpty()) {
-        ver = "1.33";
+        ver = "1.34";
     }
     return ver;
 }
