@@ -58,6 +58,7 @@ public:
     bool hasAreaSelection() const { return !m_selectedArea.isNull() && m_selectedArea.width() > 2 && m_selectedArea.height() > 2; }
     void clearAreaSelection();
 
+    void copyActiveImage();
     void copySelectedArea();
     void cutSelectedArea();
     void moveSelectedArea();
@@ -96,6 +97,7 @@ signals:
     void toolActionCompleted();
     void badgeCounterChanged(int nextNumber);
     void colorPicked(const QColor& color, bool isFill);
+    void statusMessageRequested(const QString& message, int timeout = 3000);
 
 protected:
     void mousePressEvent(QGraphicsSceneMouseEvent* event) override;

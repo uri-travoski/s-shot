@@ -20,6 +20,7 @@ void ColorPickerOverlay::startPicking() {
     setGeometry(virtualGeo);
 
     m_screenGrab = screen->grabWindow(0, virtualGeo.x(), virtualGeo.y(), virtualGeo.width(), virtualGeo.height());
+    m_screenGrab.setDevicePixelRatio(1.0);
     m_currentPos = QCursor::pos() - virtualGeo.topLeft();
 
     setCursor(Qt::CrossCursor);

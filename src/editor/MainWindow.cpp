@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 #include "items/TextItem.h"
+#include "items/PixmapItem.h"
 #include "../core/SettingsManager.h"
 #include "../core/UpdateManager.h"
 #include "../core/IconManager.h"
@@ -542,8 +543,10 @@ void MainWindow::addImageTab(const QPixmap& pixmap, const QString& title) {
         }
     }
 
+    QPixmap normPix = pixmap;
+    normPix.setDevicePixelRatio(1.0);
     CanvasScene* scene = new CanvasScene(this);
-    scene->setBasePixmap(pixmap);
+    scene->setBasePixmap(normPix);
     scene->setModified(false);
     scene->setStrokeColor(m_currentStrokeColor);
     scene->setFillColor(m_currentFillColor);
@@ -553,6 +556,9 @@ void MainWindow::addImageTab(const QPixmap& pixmap, const QString& title) {
     connect(scene, &QGraphicsScene::selectionChanged, this, &MainWindow::onSceneSelectionChanged);
     connect(scene, &CanvasScene::badgeCounterChanged, this, &MainWindow::onBadgeCounterChanged);
     connect(scene, &CanvasScene::colorPicked, this, &MainWindow::onColorPickedFromScene);
+    connect(scene, &CanvasScene::statusMessageRequested, this, [this](const QString& msg, int timeout) {
+        statusBar()->showMessage(msg, timeout);
+    });
     connect(scene, &CanvasScene::sceneModified, this, [this, scene]() {
         QPixmap p = scene->basePixmap();
         if (m_statusDimensions) {
@@ -706,11 +712,25 @@ void MainWindow::copyActiveImageToClipboard() {
         }
     }
 
+    // Check if a single PixmapItem is selected
+    QList<QGraphicsItem*> selected = scene->selectedItems();
+    if (selected.size() == 1 && !scene->hasAreaSelection()) {
+        if (auto* pm = dynamic_cast<PixmapItem*>(selected.first())) {
+            QPixmap p = pm->pixmap();
+            p.setDevicePixelRatio(1.0);
+            if (ClipboardHelper::copyImage(p)) {
+                statusBar()->showMessage(tr("Copied selected item to clipboard!"), 3000);
+            }
+            return;
+        }
+    }
+
     QPixmap outPix;
     if (scene->hasAreaSelection()) {
-        QRect cropRect = scene->selectedArea().toRect().intersected(scene->basePixmap().rect());
+        QRect cropRect = scene->selectedArea().toRect().intersected(scene->sceneRect().toRect());
         if (cropRect.width() >= 2 && cropRect.height() >= 2) {
             QPixmap fullPix = scene->renderToPixmap();
+            fullPix.setDevicePixelRatio(1.0);
             outPix = fullPix.copy(cropRect);
         } else {
             outPix = scene->renderToPixmap();
@@ -718,6 +738,7 @@ void MainWindow::copyActiveImageToClipboard() {
     } else {
         outPix = scene->renderToPixmap();
     }
+    outPix.setDevicePixelRatio(1.0);
 
     if (ClipboardHelper::copyImage(outPix)) {
         statusBar()->showMessage(tr("Image copied to clipboard!"), 3000);

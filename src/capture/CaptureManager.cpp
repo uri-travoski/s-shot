@@ -2,9 +2,9 @@
 #include "RegionSnippingOverlay.h"
 #include "ColorPickerOverlay.h"
 #include "../core/SettingsManager.h"
+#include "../core/ClipboardHelper.h"
 #include <QGuiApplication>
 #include <QScreen>
-#include <QClipboard>
 #include <malloc.h>
 
 CaptureManager& CaptureManager::instance() {
@@ -46,9 +46,10 @@ void CaptureManager::doCaptureFullscreen() {
     QScreen* screen = QGuiApplication::primaryScreen();
     QRect virtualGeometry = screen->virtualGeometry();
     QPixmap grab = screen->grabWindow(0, virtualGeometry.x(), virtualGeometry.y(), virtualGeometry.width(), virtualGeometry.height());
+    grab.setDevicePixelRatio(1.0);
 
     if (SettingsManager::instance().autoCopyToClipboard()) {
-        QGuiApplication::clipboard()->setPixmap(grab);
+        ClipboardHelper::copyImage(grab);
     }
 
     emit screenshotReady(grab);
@@ -70,11 +71,13 @@ void CaptureManager::pickColor() {
 }
 
 void CaptureManager::onRegionCaptured(const QPixmap& pixmap) {
+    QPixmap normPix = pixmap;
+    normPix.setDevicePixelRatio(1.0);
     if (SettingsManager::instance().autoCopyToClipboard()) {
-        QGuiApplication::clipboard()->setPixmap(pixmap);
+        ClipboardHelper::copyImage(normPix);
     }
 
-    emit screenshotReady(pixmap);
+    emit screenshotReady(normPix);
 }
 
 void CaptureManager::onColorPicked(const QColor& color, const QString& hex) {

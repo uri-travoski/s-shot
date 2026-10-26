@@ -11,6 +11,7 @@
 #include <QDebug>
 #include "CanvasView.h"
 #include "../core/ClipboardHelper.h"
+#include "../core/IconManager.h"
 
 // --- Undo Commands ---
 
@@ -239,8 +240,10 @@ bool CanvasScene::isSystemItem(QGraphicsItem* item) const {
 }
 
 void CanvasScene::setBasePixmap(const QPixmap& pixmap) {
-    m_basePixmapItem->setPixmap(pixmap);
-    setSceneRect(pixmap.rect());
+    QPixmap normPix = pixmap;
+    normPix.setDevicePixelRatio(1.0);
+    m_basePixmapItem->setPixmap(normPix);
+    setSceneRect(normPix.rect());
     clearAreaSelection();
     if (m_canvasFrameItem) {
         static_cast<CanvasFrameItem*>(m_canvasFrameItem)->notifyGeometryChange();
@@ -248,7 +251,7 @@ void CanvasScene::setBasePixmap(const QPixmap& pixmap) {
     }
     for (auto* item : items()) {
         if (auto* blur = dynamic_cast<BlurItem*>(item)) {
-            blur->updateEffect(pixmap);
+            blur->updateEffect(normPix);
         }
     }
     update();
@@ -302,6 +305,7 @@ QPixmap CanvasScene::renderToPixmap() const {
     if (m_canvasFrameItem) m_canvasFrameItem->setVisible(true);
     const_cast<CanvasScene*>(this)->blockSignals(oldBlock);
 
+    result.setDevicePixelRatio(1.0);
     return result;
 }
 
@@ -413,13 +417,31 @@ void CanvasScene::clearAreaSelection() {
     emit areaSelectionChanged(QRectF(), false);
 }
 
+void CanvasScene::copyActiveImage() {
+    if (hasAreaSelection()) {
+        copySelectedArea();
+        return;
+    }
+    QPixmap fullPix = renderToPixmap();
+    if (!fullPix.isNull()) {
+        fullPix.setDevicePixelRatio(1.0);
+        if (ClipboardHelper::copyImage(fullPix)) {
+            emit statusMessageRequested(tr("Image copied to clipboard!"));
+        }
+    }
+}
+
 void CanvasScene::copySelectedArea() {
     if (!hasAreaSelection()) return;
     QPixmap fullPix = renderToPixmap();
+    fullPix.setDevicePixelRatio(1.0);
     QRect cropRect = m_selectedArea.toRect().intersected(fullPix.rect());
-    if (!cropRect.isEmpty()) {
+    if (!cropRect.isEmpty() && cropRect.width() >= 2 && cropRect.height() >= 2) {
         QPixmap sub = fullPix.copy(cropRect);
-        ClipboardHelper::copyImage(sub);
+        sub.setDevicePixelRatio(1.0);
+        if (ClipboardHelper::copyImage(sub)) {
+            emit statusMessageRequested(tr("Selected area copied to clipboard!"));
+        }
     }
 }
 
@@ -1311,106 +1333,126 @@ void CanvasScene::contextMenuEvent(QGraphicsSceneContextMenuEvent* event) {
     }
 
     QPixmap clipPix = ClipboardHelper::getClipboardImage();
-
-    if (m_currentTool == ToolType::Select && hasAreaSelection()) {
-        QMenu menu;
-        QAction* actCopy = menu.addAction(tr("Copy"));
-        QAction* actCut = menu.addAction(tr("Cut"));
-        QAction* actCrop = menu.addAction(tr("Crop"));
-        QAction* actPaste = nullptr;
-        if (!clipPix.isNull()) {
-            actPaste = menu.addAction(tr("Paste"));
-        }
-        menu.addSeparator();
-        QAction* actDel = menu.addAction(tr("Delete Area"));
-
-        QAction* chosen = menu.exec(event->screenPos());
-        if (chosen == actCopy) {
-            copySelectedArea();
-            event->accept();
-        } else if (chosen == actCut) {
-            cutSelectedArea();
-            event->accept();
-        } else if (chosen == actCrop) {
-            cropToSelectedArea();
-            event->accept();
-        } else if (chosen == actDel) {
-            deleteSelectedArea();
-            event->accept();
-        } else if (actPaste && chosen == actPaste) {
-            pasteImage(clipPix, m_selectedArea.topLeft());
-            event->accept();
-        }
-        return;
-    }
+    QMenu menu;
 
     // Check if an existing annotation/pixmap item was clicked
     QGraphicsItem* clicked = itemAt(event->scenePos(), QTransform());
-    if (clicked && !isSystemItem(clicked)) {
-        QMenu menu;
-        QAction* actCopy = nullptr;
-        if (auto* pm = dynamic_cast<PixmapItem*>(clicked)) {
-            actCopy = menu.addAction(tr("Copy"));
-        }
-        QAction* actDel = menu.addAction(tr("Delete"));
-        menu.addSeparator();
-        QAction* actFront = menu.addAction(tr("Bring to Front"));
-        QAction* actBack = menu.addAction(tr("Send to Back"));
+    bool clickedAnnotation = (clicked && !isSystemItem(clicked));
 
-        QAction* chosen = menu.exec(event->screenPos());
-        if (actCopy && chosen == actCopy) {
-            ClipboardHelper::copyImage(static_cast<PixmapItem*>(clicked)->pixmap());
-            event->accept();
-            return;
-        } else if (chosen == actDel) {
-            m_undoStack.push(new RemoveItemCommand(this, clicked));
-            emit sceneModified();
-            event->accept();
-            return;
-        } else if (chosen == actFront) {
-            qreal maxZ = 2.0;
-            for (auto* it : items()) {
-                if (!isSystemItem(it) && it->zValue() > maxZ) maxZ = it->zValue();
-            }
-            clicked->setZValue(maxZ + 1.0);
-            emit sceneModified();
-            event->accept();
-            return;
-        } else if (chosen == actBack) {
-            clicked->setZValue(1.0);
-            emit sceneModified();
-            event->accept();
-            return;
-        }
+    // 1. Copy Actions: Right-clicking anywhere on the image allows copying!
+    QAction* actCopy = nullptr;
+    QAction* actCopyFull = nullptr;
+    if (hasAreaSelection()) {
+        actCopy = menu.addAction(IconManager::getIcon("copy"), tr("Copy Selected Area"));
+        actCopyFull = menu.addAction(IconManager::getIcon("copy"), tr("Copy Full Image"));
+    } else {
+        actCopy = menu.addAction(IconManager::getIcon("copy"), tr("Copy Image"));
     }
 
+    // 2. Paste Action (enabled if clipboard has an image)
+    QAction* actPaste = nullptr;
     if (!clipPix.isNull()) {
-        QMenu menu;
-        QAction* actPaste = menu.addAction(tr("Paste Image Here"));
-        QAction* chosen = menu.exec(event->screenPos());
-        if (chosen == actPaste) {
-            pasteImage(clipPix, event->scenePos());
-            event->accept();
-            return;
-        }
+        actPaste = menu.addAction(IconManager::getIcon("paste"), tr("Paste Image Here"));
     }
 
-    if (m_currentTool == ToolType::Badge) {
-        QMenu menu;
-        QAction* actReset = menu.addAction(tr("Reset Badge Numbering to 1"));
-        QAction* actSet = menu.addAction(tr("Set Next Badge Number..."));
+    // 3. Area selection actions (if active area selection)
+    QAction* actCut = nullptr;
+    QAction* actCrop = nullptr;
+    QAction* actDelArea = nullptr;
+    if (hasAreaSelection()) {
+        menu.addSeparator();
+        actCut = menu.addAction(tr("Cut Selected Area"));
+        actCrop = menu.addAction(tr("Crop to Selected Area"));
+        actDelArea = menu.addAction(tr("Delete Area"));
+    }
 
-        QAction* chosen = menu.exec(event->screenPos());
-        if (chosen == actReset) {
-            resetBadgeCounter();
-            event->accept();
-        } else if (chosen == actSet) {
-            bool ok = false;
-            int n = QInputDialog::getInt(nullptr, tr("Set Next Badge Number"), tr("Next Badge Number:"), m_badgeCounter, 1, 9999, 1, &ok);
-            if (ok) {
-                setBadgeCounter(n);
+    // 4. Item specific actions (if clicked an annotation item)
+    QAction* actCopyItem = nullptr;
+    QAction* actDelItem = nullptr;
+    QAction* actFront = nullptr;
+    QAction* actBack = nullptr;
+    if (clickedAnnotation) {
+        menu.addSeparator();
+        if (auto* pm = dynamic_cast<PixmapItem*>(clicked)) {
+            actCopyItem = menu.addAction(IconManager::getIcon("copy"), tr("Copy Selected Item"));
+        }
+        actDelItem = menu.addAction(tr("Delete Item"));
+        actFront = menu.addAction(tr("Bring to Front"));
+        actBack = menu.addAction(tr("Send to Back"));
+    }
+
+    // 5. Badge tool specific actions
+    QAction* actResetBadge = nullptr;
+    QAction* actSetBadge = nullptr;
+    if (m_currentTool == ToolType::Badge) {
+        menu.addSeparator();
+        actResetBadge = menu.addAction(tr("Reset Badge Numbering to 1"));
+        actSetBadge = menu.addAction(tr("Set Next Badge Number..."));
+    }
+
+    QAction* chosen = menu.exec(event->screenPos());
+    if (!chosen) {
+        event->accept();
+        return;
+    }
+
+    if (chosen == actCopy) {
+        if (hasAreaSelection()) {
+            copySelectedArea();
+        } else {
+            copyActiveImage();
+        }
+        event->accept();
+    } else if (actCopyFull && chosen == actCopyFull) {
+        copyActiveImage();
+        event->accept();
+    } else if (actCopyItem && chosen == actCopyItem) {
+        if (auto* pm = dynamic_cast<PixmapItem*>(clicked)) {
+            QPixmap p = pm->pixmap();
+            p.setDevicePixelRatio(1.0);
+            if (ClipboardHelper::copyImage(p)) {
+                emit statusMessageRequested(tr("Copied item to clipboard!"));
             }
             event->accept();
         }
+    } else if (actPaste && chosen == actPaste) {
+        QPointF pastePos = hasAreaSelection() ? m_selectedArea.topLeft() : event->scenePos();
+        pasteImage(clipPix, pastePos);
+        event->accept();
+    } else if (actCut && chosen == actCut) {
+        cutSelectedArea();
+        event->accept();
+    } else if (actCrop && chosen == actCrop) {
+        cropToSelectedArea();
+        event->accept();
+    } else if (actDelArea && chosen == actDelArea) {
+        deleteSelectedArea();
+        event->accept();
+    } else if (actDelItem && chosen == actDelItem) {
+        m_undoStack.push(new RemoveItemCommand(this, clicked));
+        emit sceneModified();
+        event->accept();
+    } else if (actFront && chosen == actFront) {
+        qreal maxZ = 2.0;
+        for (auto* it : items()) {
+            if (!isSystemItem(it) && it->zValue() > maxZ) maxZ = it->zValue();
+        }
+        clicked->setZValue(maxZ + 1.0);
+        emit sceneModified();
+        event->accept();
+    } else if (actBack && chosen == actBack) {
+        clicked->setZValue(1.0);
+        emit sceneModified();
+        event->accept();
+    } else if (actResetBadge && chosen == actResetBadge) {
+        resetBadgeCounter();
+        event->accept();
+    } else if (actSetBadge && chosen == actSetBadge) {
+        bool ok = false;
+        int n = QInputDialog::getInt(nullptr, tr("Set Next Badge Number"), tr("Next Badge Number:"), m_badgeCounter, 1, 9999, 1, &ok);
+        if (ok) {
+            setBadgeCounter(n);
+        }
+        event->accept();
     }
 }

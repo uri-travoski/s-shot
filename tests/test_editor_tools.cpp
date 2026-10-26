@@ -78,6 +78,8 @@ private slots:
     void testTextEditingBackspaceAndDelete();
     void testCanvasViewScrollbarsWhenZoomed();
     void testColorPickerTool();
+    void testExactScreenshotBoundsAndDprNormalization();
+    void testRightClickCopyAndToolbarCopy();
 };
 
 void TestEditorTools::initTestCase() {
@@ -688,6 +690,9 @@ void TestEditorTools::testAutoCheckUpdatesSetting() {
 
 void TestEditorTools::testUpdateManagerVersionComparison() {
     // Newer remote versions
+    QVERIFY(UpdateManager::isVersionNewer("v1.32", "1.31"));
+    QVERIFY(UpdateManager::isVersionNewer("v1.31", "1.30"));
+    QVERIFY(UpdateManager::isVersionNewer("v1.30", "1.29"));
     QVERIFY(UpdateManager::isVersionNewer("v1.28", "1.27"));
     QVERIFY(UpdateManager::isVersionNewer("v1.27", "1.26"));
     QVERIFY(UpdateManager::isVersionNewer("v1.26", "1.25"));
@@ -1843,6 +1848,107 @@ void TestEditorTools::testColorPickerTool() {
     curView->viewport()->grab().save("/home/owner/distrobox-homes/devbox/.gemini/antigravity/brain/e77fcd3f-2a52-4f22-843d-d82ecd75f998/color_picker_loupe_preview.png");
 
     win.grab().save("/home/owner/distrobox-homes/devbox/.gemini/antigravity/brain/e77fcd3f-2a52-4f22-843d-d82ecd75f998/color_picker_tool_preview.png");
+}
+
+void TestEditorTools::testExactScreenshotBoundsAndDprNormalization() {
+    // 1. Verify that a pixmap with HiDPI / scale > 1.0 (e.g. 1.25) is normalized to DPR 1.0
+    // and does not leave extra empty transparent canvas on the right and bottom.
+    QImage testImg(200, 150, QImage::Format_ARGB32_Premultiplied);
+    testImg.fill(QColor(255, 0, 0)); // solid red
+    QPixmap grabPix = QPixmap::fromImage(testImg);
+    grabPix.setDevicePixelRatio(1.25);
+
+    // Simulate user selecting region 10, 10 to 110, 90 (size 100x80)
+    QRect snipRect(10, 10, 100, 80);
+    QPixmap cropped = grabPix.copy(snipRect);
+    cropped.setDevicePixelRatio(1.0);
+    QCOMPARE(cropped.devicePixelRatio(), 1.0);
+    QCOMPARE(cropped.size(), QSize(100, 80));
+
+    // Verify scene base pixmap geometry
+    CanvasScene scene;
+    scene.setBasePixmap(cropped);
+    QCOMPARE(scene.sceneRect(), QRectF(0, 0, 100, 80));
+
+    // Verify rendered export has exact dimensions and no transparent borders
+    QPixmap rendered = scene.renderToPixmap();
+    QCOMPARE(rendered.devicePixelRatio(), 1.0);
+    QCOMPARE(rendered.size(), QSize(100, 80));
+
+    QImage renderedImg = rendered.toImage();
+    // Test top-left, center, and bottom-right corner pixels
+    QCOMPARE(renderedImg.pixelColor(0, 0), QColor(255, 0, 0));
+    QCOMPARE(renderedImg.pixelColor(50, 40), QColor(255, 0, 0));
+    QCOMPARE(renderedImg.pixelColor(99, 79), QColor(255, 0, 0)); // bottom-right is not empty/transparent
+}
+
+void TestEditorTools::testRightClickCopyAndToolbarCopy() {
+    MainWindow win;
+    win.resize(600, 450);
+    win.show();
+
+    // 1. Test image tab creation and DPR normalization
+    QImage baseImg(160, 120, QImage::Format_ARGB32_Premultiplied);
+    baseImg.fill(QColor(0, 120, 240)); // Blue
+    QPixmap basePix = QPixmap::fromImage(baseImg);
+    basePix.setDevicePixelRatio(1.5); // HiDPI simulation
+
+    win.addImageTab(basePix, "CopyTest");
+    QApplication::processEvents();
+
+    CanvasScene* scene = win.currentScene();
+    QVERIFY(scene != nullptr);
+    QCOMPARE(scene->basePixmap().devicePixelRatio(), 1.0);
+    QCOMPARE(scene->sceneRect(), QRectF(0, 0, 160, 120));
+
+    // 2. Test toolbar copy action
+    QGuiApplication::clipboard()->clear();
+    win.copyActiveImageToClipboard();
+    QApplication::processEvents();
+
+    QPixmap clipPix = ClipboardHelper::getClipboardImage();
+    QVERIFY(!clipPix.isNull());
+    QCOMPARE(clipPix.devicePixelRatio(), 1.0);
+    QCOMPARE(clipPix.width(), 160);
+    QCOMPARE(clipPix.height(), 120);
+
+    // 3. Test CanvasScene::copyActiveImage() (right-click copy trigger)
+    QGuiApplication::clipboard()->clear();
+    scene->copyActiveImage();
+    QApplication::processEvents();
+
+    clipPix = ClipboardHelper::getClipboardImage();
+    QVERIFY(!clipPix.isNull());
+    QCOMPARE(clipPix.size(), QSize(160, 120));
+
+    // 4. Test Area Selection copy
+    scene->setSelectedArea(QRectF(10, 10, 50, 40));
+    QVERIFY(scene->hasAreaSelection());
+    QGuiApplication::clipboard()->clear();
+
+    scene->copyActiveImage(); // When area is selected, copies selected area
+    QApplication::processEvents();
+
+    clipPix = ClipboardHelper::getClipboardImage();
+    QVERIFY(!clipPix.isNull());
+    QCOMPARE(clipPix.size(), QSize(50, 40));
+
+    // 5. Test item copy
+    scene->clearAreaSelection();
+    QImage stickerImg(30, 30, QImage::Format_ARGB32_Premultiplied);
+    stickerImg.fill(QColor(0, 255, 0));
+    PixmapItem* sticker = new PixmapItem(QPixmap::fromImage(stickerImg));
+    sticker->setPos(20, 20);
+    scene->addItem(sticker);
+    sticker->setSelected(true);
+
+    QGuiApplication::clipboard()->clear();
+    win.copyActiveImageToClipboard();
+    QApplication::processEvents();
+
+    clipPix = ClipboardHelper::getClipboardImage();
+    QVERIFY(!clipPix.isNull());
+    QCOMPARE(clipPix.size(), QSize(30, 30));
 }
 
 int main(int argc, char** argv) {

@@ -4,6 +4,9 @@
 #include <QGraphicsPixmapItem>
 #include <QTimer>
 #include <QPainterPath>
+#include <QMenu>
+#include "../core/IconManager.h"
+#include "../core/ClipboardHelper.h"
 
 CanvasView::CanvasView(CanvasScene* scene, QWidget* parent)
     : QGraphicsView(scene, parent)
@@ -453,3 +456,35 @@ void CanvasView::drawColorPickerLoupe(QPainter& p, const QPoint& viewPos) {
     p.drawText(QRect(infoRect.left() + 22, infoRect.top(), infoRect.width() - 24, infoRect.height()),
                Qt::AlignVCenter | Qt::AlignLeft, hexStr);
 }
+
+void CanvasView::contextMenuEvent(QContextMenuEvent* event) {
+    QGraphicsView::contextMenuEvent(event);
+    if (event->isAccepted()) {
+        return;
+    }
+
+    if (!m_scene) return;
+
+    QMenu menu(this);
+    QAction* actCopy = menu.addAction(IconManager::getIcon("copy"), tr("Copy Image"));
+    QPixmap clipPix = ClipboardHelper::getClipboardImage();
+    QAction* actPaste = nullptr;
+    if (!clipPix.isNull()) {
+        actPaste = menu.addAction(IconManager::getIcon("paste"), tr("Paste Image"));
+    }
+
+    QAction* chosen = menu.exec(event->globalPos());
+    if (!chosen) {
+        event->accept();
+        return;
+    }
+
+    if (chosen == actCopy) {
+        m_scene->copyActiveImage();
+        event->accept();
+    } else if (actPaste && chosen == actPaste) {
+        m_scene->pasteImage(clipPix, mapToScene(event->pos()));
+        event->accept();
+    }
+}
+

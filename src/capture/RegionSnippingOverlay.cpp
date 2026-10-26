@@ -23,6 +23,7 @@ void RegionSnippingOverlay::startSnipping() {
     // Grab complete virtual desktop
     WId rootWin = 0;
     m_screenGrab = screen->grabWindow(rootWin, virtualGeo.x(), virtualGeo.y(), virtualGeo.width(), virtualGeo.height());
+    m_screenGrab.setDevicePixelRatio(1.0);
 
     m_isSelecting = false;
     m_selectionDone = false;
@@ -266,6 +267,7 @@ void RegionSnippingOverlay::mouseReleaseEvent(QMouseEvent* event) {
             );
             m_selectedPhysRect = cropPhys;
             QPixmap cropped = m_screenGrab.copy(cropPhys.intersected(m_screenGrab.rect()));
+            cropped.setDevicePixelRatio(1.0);
 
             hide();
 
@@ -298,6 +300,7 @@ void RegionSnippingOverlay::keyPressEvent(QKeyEvent* event) {
         );
         m_selectedPhysRect = cropPhys;
         QPixmap cropped = m_screenGrab.copy(cropPhys.intersected(m_screenGrab.rect()));
+        cropped.setDevicePixelRatio(1.0);
         hide();
         if (!cropped.isNull() && cropped.width() > 0 && cropped.height() > 0) {
             emit regionCaptured(cropped);
