@@ -14,8 +14,12 @@
 #include "items/TextItem.h"
 #include "items/BlurItem.h"
 #include "items/PixmapItem.h"
+#include "items/AreaSelectionItem.h"
+
+class TestEditorTools;
 
 class CanvasScene : public QGraphicsScene {
+    friend class TestEditorTools;
     Q_OBJECT
 
 public:
@@ -104,6 +108,7 @@ protected:
     void mouseMoveEvent(QGraphicsSceneMouseEvent* event) override;
     void mouseReleaseEvent(QGraphicsSceneMouseEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
+    void mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) override;
     void contextMenuEvent(QGraphicsSceneContextMenuEvent* event) override;
 
 private:
@@ -127,10 +132,13 @@ private:
     BaseAnnotationItem* m_activeItem = nullptr;
     bool m_isDrawing = false;
 
-    // Area selection state
+    // Area selection and Photoshop-style crop state
     bool m_isSelectingArea = false;
     QRectF m_selectedArea;
-    QGraphicsRectItem* m_areaSelectionRectItem = nullptr;
+    AreaSelectionItem* m_areaSelectionItem = nullptr;
+    AreaSelectionItem::Handle m_cropActiveHandle = AreaSelectionItem::Handle::None;
+    QPointF m_cropPressScenePos;
+    QRectF m_cropPressRect;
 
     // Canvas edge resize state
     QGraphicsItem* m_canvasFrameItem = nullptr;

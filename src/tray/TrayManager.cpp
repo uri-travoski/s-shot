@@ -15,7 +15,7 @@ TrayManager::TrayManager(std::function<MainWindow*()> getMainWindowFunc, QObject
     , m_getMainWindow(getMainWindowFunc)
 {
     m_trayIcon = new QSystemTrayIcon(this);
-    m_trayIcon->setIcon(IconManager::getAppIcon());
+    m_trayIcon->setIcon(IconManager::getTrayIcon());
     m_trayIcon->setToolTip("S-Shot - Screenshot & Annotation Tool");
 
     createTrayMenu();
@@ -35,7 +35,7 @@ MainWindow* TrayManager::mainWindow() {
 }
 
 void TrayManager::showTrayIcon() {
-    m_trayIcon->setIcon(IconManager::getAppIcon());
+    m_trayIcon->setIcon(IconManager::getTrayIcon());
     m_trayIcon->show();
 }
 

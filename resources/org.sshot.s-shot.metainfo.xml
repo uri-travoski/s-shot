@@ -44,6 +44,11 @@
   </screenshots>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.33" date="2026-10-26">
+      <description>
+        <p>Pasted image resizing with 8 edge and corner handles, Photoshop-style crop workflow with interactive adjustments and rule-of-thirds grid, canvas-bounded annotations restricting writing and drawing to the image canvas, and 10% smaller system tray icon.</p>
+      </description>
+    </release>
     <release version="1.32" date="2026-10-26">
       <description>
         <p>Right-click context menu copying in image editor, reliable Wayland and X11 clipboard integration for toolbar copy button, and exact screenshot boundary capture preventing extra canvas margins on HiDPI displays.</p>

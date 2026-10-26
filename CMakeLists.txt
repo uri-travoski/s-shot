@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(s-shot
-    VERSION 1.32.0
+    VERSION 1.33.0
     DESCRIPTION "Lightweight Screenshot & Annotation Tool for Linux"
     LANGUAGES CXX
 )
@@ -39,6 +39,7 @@ set(SOURCES
     src/editor/items/TextItem.cpp
     src/editor/items/BlurItem.cpp
     src/editor/items/PixmapItem.cpp
+    src/editor/items/AreaSelectionItem.cpp
     src/dialogs/SettingsDialog.cpp
     src/dialogs/AboutDialog.cpp
     resources/resources.qrc
@@ -94,6 +95,7 @@ add_executable(test_editor_tools
     src/editor/items/TextItem.cpp
     src/editor/items/BlurItem.cpp
     src/editor/items/PixmapItem.cpp
+    src/editor/items/AreaSelectionItem.cpp
     src/dialogs/SettingsDialog.cpp
     src/dialogs/AboutDialog.cpp
     resources/resources.qrc

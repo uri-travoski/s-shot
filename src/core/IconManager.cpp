@@ -79,6 +79,52 @@ QIcon IconManager::getAppIcon() {
     return s_appIcon;
 }
 
+QIcon IconManager::getTrayIcon() {
+    static QIcon s_trayIcon;
+    if (!s_trayIcon.isNull()) {
+        return s_trayIcon;
+    }
+
+    QSvgRenderer renderer(QStringLiteral(":/icons/s-shot.svg"));
+    const QVector<int> sizes = {16, 20, 22, 24, 32, 48, 64};
+    if (renderer.isValid()) {
+        for (int sz : sizes) {
+            QPixmap pix(sz, sz);
+            pix.fill(Qt::transparent);
+            QPainter painter(&pix);
+            painter.setRenderHint(QPainter::Antialiasing);
+            painter.setRenderHint(QPainter::SmoothPixmapTransform);
+
+            // Scale down 10%: inner size is sz * 0.90, centered with 5% margins
+            qreal targetSize = sz * 0.90;
+            qreal offset = (sz - targetSize) / 2.0;
+            QRectF targetRect(offset, offset, targetSize, targetSize);
+            renderer.render(&painter, targetRect);
+            painter.end();
+            s_trayIcon.addPixmap(pix);
+        }
+    } else {
+        QIcon base = getAppIcon();
+        for (int sz : sizes) {
+            QPixmap basePix = base.pixmap(sz, sz);
+            if (!basePix.isNull()) {
+                QPixmap pix(sz, sz);
+                pix.fill(Qt::transparent);
+                QPainter painter(&pix);
+                painter.setRenderHint(QPainter::Antialiasing);
+                painter.setRenderHint(QPainter::SmoothPixmapTransform);
+                int targetSize = qMax(1, qRound(sz * 0.90));
+                int offset = (sz - targetSize) / 2;
+                painter.drawPixmap(offset, offset, basePix.scaled(targetSize, targetSize, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+                painter.end();
+                s_trayIcon.addPixmap(pix);
+            }
+        }
+    }
+
+    return s_trayIcon;
+}
+
 void IconManager::clearCache() {
     s_iconCache.clear();
 }

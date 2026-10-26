@@ -226,16 +226,13 @@ CanvasScene::CanvasScene(QObject* parent)
     m_canvasResizeGuideItem->setVisible(false);
     addItem(m_canvasResizeGuideItem);
 
-    m_areaSelectionRectItem = new QGraphicsRectItem();
-    m_areaSelectionRectItem->setZValue(10000);
-    m_areaSelectionRectItem->setPen(QPen(QColor(48, 229, 0), 2, Qt::DashLine));
-    m_areaSelectionRectItem->setBrush(QColor(48, 229, 0, 30));
-    m_areaSelectionRectItem->setVisible(false);
-    addItem(m_areaSelectionRectItem);
+    m_areaSelectionItem = new AreaSelectionItem();
+    m_areaSelectionItem->setVisible(false);
+    addItem(m_areaSelectionItem);
 }
 
 bool CanvasScene::isSystemItem(QGraphicsItem* item) const {
-    return item == m_basePixmapItem || item == m_areaSelectionRectItem ||
+    return item == m_basePixmapItem || item == m_areaSelectionItem ||
            item == m_canvasFrameItem || item == m_canvasResizeGuideItem;
 }
 
@@ -244,6 +241,9 @@ void CanvasScene::setBasePixmap(const QPixmap& pixmap) {
     normPix.setDevicePixelRatio(1.0);
     m_basePixmapItem->setPixmap(normPix);
     setSceneRect(normPix.rect());
+    if (m_areaSelectionItem) {
+        m_areaSelectionItem->setCanvasRect(normPix.rect());
+    }
     clearAreaSelection();
     if (m_canvasFrameItem) {
         static_cast<CanvasFrameItem*>(m_canvasFrameItem)->notifyGeometryChange();
@@ -277,7 +277,7 @@ QPixmap CanvasScene::renderToPixmap() const {
     painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
 
     // Hide selection markers, canvas frame, and guides during export
-    if (m_areaSelectionRectItem) m_areaSelectionRectItem->setVisible(false);
+    if (m_areaSelectionItem) m_areaSelectionItem->setVisible(false);
     if (m_canvasFrameItem) m_canvasFrameItem->setVisible(false);
     if (m_canvasResizeGuideItem) m_canvasResizeGuideItem->setVisible(false);
 
@@ -299,8 +299,8 @@ QPixmap CanvasScene::renderToPixmap() const {
 
     // Restore selection and frame
     for (auto* item : selected) item->setSelected(true);
-    if (hasAreaSelection() && m_areaSelectionRectItem) {
-        m_areaSelectionRectItem->setVisible(true);
+    if (hasAreaSelection() && m_areaSelectionItem) {
+        m_areaSelectionItem->setVisible(true);
     }
     if (m_canvasFrameItem) m_canvasFrameItem->setVisible(true);
     const_cast<CanvasScene*>(this)->blockSignals(oldBlock);
@@ -377,6 +377,10 @@ QImage CanvasScene::imagePatch(const QPointF& centerPos, int span) const {
 void CanvasScene::setCurrentTool(ToolType tool) {
     m_currentTool = tool;
     clearAreaSelection();
+    if (m_areaSelectionItem) {
+        m_areaSelectionItem->setCanvasRect(sceneRect());
+        m_areaSelectionItem->setCropMode(tool == ToolType::Crop);
+    }
 
     // Enable/disable movable flags depending on tool
     auto allItems = items();
@@ -400,19 +404,22 @@ void CanvasScene::setCurrentTool(ToolType tool) {
 }
 
 void CanvasScene::setSelectedArea(const QRectF& rect) {
-    m_selectedArea = rect;
-    if (m_areaSelectionRectItem) {
-        m_areaSelectionRectItem->setRect(rect);
-        m_areaSelectionRectItem->setVisible(!rect.isNull() && rect.width() > 2 && rect.height() > 2);
+    m_selectedArea = rect.normalized();
+    if (m_areaSelectionItem) {
+        m_areaSelectionItem->setCanvasRect(sceneRect());
+        m_areaSelectionItem->setCropMode(m_currentTool == ToolType::Crop);
+        m_areaSelectionItem->setRect(m_selectedArea);
+        m_areaSelectionItem->setVisible(!rect.isNull() && rect.width() > 2 && rect.height() > 2);
     }
     emit areaSelectionChanged(m_selectedArea, hasAreaSelection());
 }
 
 void CanvasScene::clearAreaSelection() {
     m_selectedArea = QRectF();
-    if (m_areaSelectionRectItem) {
-        m_areaSelectionRectItem->setVisible(false);
-        m_areaSelectionRectItem->setRect(QRectF());
+    m_cropActiveHandle = AreaSelectionItem::Handle::None;
+    if (m_areaSelectionItem) {
+        m_areaSelectionItem->setVisible(false);
+        m_areaSelectionItem->setRect(QRectF());
     }
     emit areaSelectionChanged(QRectF(), false);
 }
@@ -685,6 +692,28 @@ void CanvasScene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
 
     m_startPoint = event->scenePos();
 
+    // 0. Boundary restriction: User should only be able to write or add things within the available image canvas
+    if (m_currentTool != ToolType::Select && m_currentTool != ToolType::Pan && m_currentTool != ToolType::Crop) {
+        if (!sceneRect().contains(m_startPoint)) {
+            event->accept();
+            return;
+        }
+    }
+
+    // Check if clicking a handle or inside an existing crop/area selection
+    if (hasAreaSelection() && (m_currentTool == ToolType::Crop || m_currentTool == ToolType::Select)) {
+        if (m_areaSelectionItem) {
+            AreaSelectionItem::Handle h = m_areaSelectionItem->handleAt(m_startPoint);
+            if (h != AreaSelectionItem::Handle::None) {
+                m_cropActiveHandle = h;
+                m_cropPressScenePos = m_startPoint;
+                m_cropPressRect = m_selectedArea;
+                event->accept();
+                return;
+            }
+        }
+    }
+
     // 1. Check if an edge resize handle was clicked (only active in Select and Pan tools)
     if (m_currentTool == ToolType::Select || m_currentTool == ToolType::Pan) {
         CanvasHandle h = handleAt(m_startPoint);
@@ -718,9 +747,15 @@ void CanvasScene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
         // Otherwise, clear selection and start area selection rectangle
         clearSelection();
         m_isSelectingArea = true;
+        m_startPoint.setX(qBound(sceneRect().left(), m_startPoint.x(), sceneRect().right()));
+        m_startPoint.setY(qBound(sceneRect().top(), m_startPoint.y(), sceneRect().bottom()));
         m_selectedArea = QRectF(m_startPoint, m_startPoint);
-        m_areaSelectionRectItem->setRect(m_selectedArea);
-        m_areaSelectionRectItem->setVisible(true);
+        if (m_areaSelectionItem) {
+            m_areaSelectionItem->setCanvasRect(sceneRect());
+            m_areaSelectionItem->setCropMode(false);
+            m_areaSelectionItem->setRect(m_selectedArea);
+            m_areaSelectionItem->setVisible(true);
+        }
         emit areaSelectionChanged(m_selectedArea, true);
         return;
     }
@@ -840,10 +875,16 @@ void CanvasScene::mousePressEvent(QGraphicsSceneMouseEvent* event) {
     }
 
     if (m_currentTool == ToolType::Crop) {
+        m_startPoint.setX(qBound(sceneRect().left(), m_startPoint.x(), sceneRect().right()));
+        m_startPoint.setY(qBound(sceneRect().top(), m_startPoint.y(), sceneRect().bottom()));
         m_isSelectingArea = true;
         m_selectedArea = QRectF(m_startPoint, m_startPoint);
-        m_areaSelectionRectItem->setRect(m_selectedArea);
-        m_areaSelectionRectItem->setVisible(true);
+        if (m_areaSelectionItem) {
+            m_areaSelectionItem->setCanvasRect(sceneRect());
+            m_areaSelectionItem->setCropMode(true);
+            m_areaSelectionItem->setRect(m_selectedArea);
+            m_areaSelectionItem->setVisible(true);
+        }
         emit areaSelectionChanged(m_selectedArea, true);
         return;
     }
@@ -920,7 +961,84 @@ void CanvasScene::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
         return;
     }
 
-    // Handle hover tracking (only for Select or Pan tools)
+    // 1. Crop / Area selection handle dragging or moving
+    if (m_cropActiveHandle != AreaSelectionItem::Handle::None) {
+        QPointF delta = event->scenePos() - m_cropPressScenePos;
+        QRectF newRect = m_cropPressRect;
+        QRectF sr = sceneRect();
+        qreal minSize = 4.0;
+
+        switch (m_cropActiveHandle) {
+        case AreaSelectionItem::Handle::Right:
+            newRect.setRight(qBound(m_cropPressRect.left() + minSize, m_cropPressRect.right() + delta.x(), sr.right()));
+            break;
+        case AreaSelectionItem::Handle::Bottom:
+            newRect.setBottom(qBound(m_cropPressRect.top() + minSize, m_cropPressRect.bottom() + delta.y(), sr.bottom()));
+            break;
+        case AreaSelectionItem::Handle::BottomRight:
+            newRect.setRight(qBound(m_cropPressRect.left() + minSize, m_cropPressRect.right() + delta.x(), sr.right()));
+            newRect.setBottom(qBound(m_cropPressRect.top() + minSize, m_cropPressRect.bottom() + delta.y(), sr.bottom()));
+            break;
+        case AreaSelectionItem::Handle::Left:
+            newRect.setLeft(qBound(sr.left(), m_cropPressRect.left() + delta.x(), m_cropPressRect.right() - minSize));
+            break;
+        case AreaSelectionItem::Handle::Top:
+            newRect.setTop(qBound(sr.top(), m_cropPressRect.top() + delta.y(), m_cropPressRect.bottom() - minSize));
+            break;
+        case AreaSelectionItem::Handle::TopLeft:
+            newRect.setLeft(qBound(sr.left(), m_cropPressRect.left() + delta.x(), m_cropPressRect.right() - minSize));
+            newRect.setTop(qBound(sr.top(), m_cropPressRect.top() + delta.y(), m_cropPressRect.bottom() - minSize));
+            break;
+        case AreaSelectionItem::Handle::TopRight:
+            newRect.setRight(qBound(m_cropPressRect.left() + minSize, m_cropPressRect.right() + delta.x(), sr.right()));
+            newRect.setTop(qBound(sr.top(), m_cropPressRect.top() + delta.y(), m_cropPressRect.bottom() - minSize));
+            break;
+        case AreaSelectionItem::Handle::BottomLeft:
+            newRect.setLeft(qBound(sr.left(), m_cropPressRect.left() + delta.x(), m_cropPressRect.right() - minSize));
+            newRect.setBottom(qBound(m_cropPressRect.top() + minSize, m_cropPressRect.bottom() + delta.y(), sr.bottom()));
+            break;
+        case AreaSelectionItem::Handle::Inside: {
+            qreal w = m_cropPressRect.width();
+            qreal h = m_cropPressRect.height();
+            qreal newX = qBound(sr.left(), m_cropPressRect.left() + delta.x(), sr.right() - w);
+            qreal newY = qBound(sr.top(), m_cropPressRect.top() + delta.y(), sr.bottom() - h);
+            newRect = QRectF(newX, newY, w, h);
+            break;
+        }
+        default:
+            break;
+        }
+
+        m_selectedArea = newRect.normalized();
+        if (m_areaSelectionItem) {
+            m_areaSelectionItem->setRect(m_selectedArea);
+        }
+        emit areaSelectionChanged(m_selectedArea, true);
+        event->accept();
+        return;
+    }
+
+    // 2. Hover tracking for crop / selection handles
+    if (!m_isDrawing && !m_isSelectingArea && hasAreaSelection() && (m_currentTool == ToolType::Crop || m_currentTool == ToolType::Select)) {
+        if (m_areaSelectionItem && m_areaSelectionItem->isVisible()) {
+            AreaSelectionItem::Handle h = m_areaSelectionItem->handleAt(event->scenePos());
+            if (h != AreaSelectionItem::Handle::None) {
+                for (auto* view : views()) {
+                    view->setCursor(AreaSelectionItem::cursorForHandle(h));
+                }
+                event->accept();
+                return;
+            } else {
+                for (auto* view : views()) {
+                    if (auto* cv = qobject_cast<CanvasView*>(view)) {
+                        cv->updateToolCursor();
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. Handle hover tracking for canvas resize handles (only for Select or Pan tools)
     if (!m_isDrawing && !m_isSelectingArea && (m_currentTool == ToolType::Select || m_currentTool == ToolType::Pan)) {
         CanvasHandle h = handleAt(event->scenePos());
         if (h != m_hoveredHandle) {
@@ -931,7 +1049,7 @@ void CanvasScene::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
             for (auto* view : views()) {
                 view->setCursor(cursorForHandle(h));
             }
-        } else {
+        } else if (!hasAreaSelection()) {
             for (auto* view : views()) {
                 if (auto* cv = qobject_cast<CanvasView*>(view)) {
                     cv->updateToolCursor();
@@ -946,14 +1064,26 @@ void CanvasScene::mouseMoveEvent(QGraphicsSceneMouseEvent* event) {
     }
 
     if (m_isSelectingArea) {
-        m_selectedArea = QRectF(m_startPoint, event->scenePos()).normalized();
-        m_areaSelectionRectItem->setRect(m_selectedArea);
+        QPointF curPt = event->scenePos();
+        QRectF sr = sceneRect();
+        curPt.setX(qBound(sr.left(), curPt.x(), sr.right()));
+        curPt.setY(qBound(sr.top(), curPt.y(), sr.bottom()));
+        m_selectedArea = QRectF(m_startPoint, curPt).normalized();
+        if (m_areaSelectionItem) {
+            m_areaSelectionItem->setCanvasRect(sr);
+            m_areaSelectionItem->setCropMode(m_currentTool == ToolType::Crop);
+            m_areaSelectionItem->setRect(m_selectedArea);
+        }
         emit areaSelectionChanged(m_selectedArea, true);
         return;
     }
 
     if (m_isDrawing && m_activeItem) {
-        updateActiveItem(event->scenePos());
+        QPointF pt = event->scenePos();
+        QRectF sr = sceneRect();
+        pt.setX(qBound(sr.left(), pt.x(), sr.right()));
+        pt.setY(qBound(sr.top(), pt.y(), sr.bottom()));
+        updateActiveItem(pt);
         return;
     }
 
@@ -988,6 +1118,17 @@ void CanvasScene::mouseReleaseEvent(QGraphicsSceneMouseEvent* event) {
             return;
         }
 
+        if (m_cropActiveHandle != AreaSelectionItem::Handle::None) {
+            m_cropActiveHandle = AreaSelectionItem::Handle::None;
+            for (auto* view : views()) {
+                if (auto* cv = qobject_cast<CanvasView*>(view)) {
+                    cv->updateToolCursor();
+                }
+            }
+            event->accept();
+            return;
+        }
+
         if (m_currentTool == ToolType::Pan) {
             event->accept();
             return;
@@ -995,11 +1136,19 @@ void CanvasScene::mouseReleaseEvent(QGraphicsSceneMouseEvent* event) {
 
         if (m_isSelectingArea) {
             m_isSelectingArea = false;
-            m_selectedArea = QRectF(m_startPoint, event->scenePos()).normalized();
+            QPointF curPt = event->scenePos();
+            QRectF sr = sceneRect();
+            curPt.setX(qBound(sr.left(), curPt.x(), sr.right()));
+            curPt.setY(qBound(sr.top(), curPt.y(), sr.bottom()));
+            m_selectedArea = QRectF(m_startPoint, curPt).normalized();
             if (m_selectedArea.width() < 5 || m_selectedArea.height() < 5) {
                 clearAreaSelection();
             } else {
-                m_areaSelectionRectItem->setRect(m_selectedArea);
+                if (m_areaSelectionItem) {
+                    m_areaSelectionItem->setCanvasRect(sr);
+                    m_areaSelectionItem->setCropMode(m_currentTool == ToolType::Crop);
+                    m_areaSelectionItem->setRect(m_selectedArea);
+                }
                 emit areaSelectionChanged(m_selectedArea, true);
             }
             return;
@@ -1014,6 +1163,17 @@ void CanvasScene::mouseReleaseEvent(QGraphicsSceneMouseEvent* event) {
     }
 
     QGraphicsScene::mouseReleaseEvent(event);
+}
+
+void CanvasScene::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) {
+    if (m_currentTool == ToolType::Crop && hasAreaSelection()) {
+        if (m_selectedArea.contains(event->scenePos())) {
+            cropToSelectedArea();
+            event->accept();
+            return;
+        }
+    }
+    QGraphicsScene::mouseDoubleClickEvent(event);
 }
 
 void CanvasScene::keyPressEvent(QKeyEvent* event) {

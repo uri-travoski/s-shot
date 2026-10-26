@@ -15,6 +15,7 @@ TextItem::TextItem(const QString& text, const QPointF& pos)
     setDefaultTextColor(m_strokeColor);
     setFlag(ItemIsMovable, true);
     setFlag(ItemIsSelectable, true);
+    setFlag(ItemSendsGeometryChanges, true);
     setTextInteractionFlags(Qt::NoTextInteraction);
 }
 
@@ -188,3 +189,20 @@ void TextItem::contextMenuEvent(QGraphicsSceneContextMenuEvent* event) {
         }
     }
 }
+
+QVariant TextItem::itemChange(GraphicsItemChange change, const QVariant& value) {
+    if (change == ItemPositionChange && scene()) {
+        QPointF newPos = value.toPointF();
+        QRectF sr = scene()->sceneRect();
+        QRectF br = boundingRect();
+        qreal minX = sr.left();
+        qreal maxX = qMax(minX, sr.right() - br.width());
+        qreal minY = sr.top();
+        qreal maxY = qMax(minY, sr.bottom() - br.height());
+        newPos.setX(qBound(minX, newPos.x(), maxX));
+        newPos.setY(qBound(minY, newPos.y(), maxY));
+        return newPos;
+    }
+    return QGraphicsTextItem::itemChange(change, value);
+}
+

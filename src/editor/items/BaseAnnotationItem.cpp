@@ -1,8 +1,29 @@
 #include "BaseAnnotationItem.h"
 #include <QPainter>
+#include <QGraphicsScene>
 
 BaseAnnotationItem::BaseAnnotationItem() {
-    setFlags(ItemIsSelectable | ItemIsMovable);
+    setFlags(ItemIsSelectable | ItemIsMovable | ItemSendsGeometryChanges);
+}
+
+QVariant BaseAnnotationItem::itemChange(GraphicsItemChange change, const QVariant& value) {
+    if (change == ItemPositionChange && scene()) {
+        QPointF newPos = value.toPointF();
+        QRectF sr = scene()->sceneRect();
+        QRectF br = boundingRect();
+        qreal minX = sr.left() - br.left();
+        qreal maxX = sr.right() - br.right();
+        qreal minY = sr.top() - br.top();
+        qreal maxY = sr.bottom() - br.bottom();
+        if (maxX >= minX) {
+            newPos.setX(qBound(minX, newPos.x(), maxX));
+        }
+        if (maxY >= minY) {
+            newPos.setY(qBound(minY, newPos.y(), maxY));
+        }
+        return newPos;
+    }
+    return QGraphicsItem::itemChange(change, value);
 }
 
 void BaseAnnotationItem::paintSelectionBorder(QPainter* painter, const QRectF& rect) {

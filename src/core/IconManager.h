@@ -16,6 +16,9 @@ public:
     // Returns the application icon containing multi-resolution raster pixmaps (16, 22, 24, 32, 48, 64, 128, 256)
     static QIcon getAppIcon();
 
+    // Returns the tray icon scaled 10% smaller with breathing room for system panels
+    static QIcon getTrayIcon();
+
     // Clear any cached icons
     static void clearCache();
 };

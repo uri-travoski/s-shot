@@ -24,6 +24,7 @@ public:
 
 protected:
     void paintSelectionBorder(QPainter* painter, const QRectF& rect);
+    QVariant itemChange(GraphicsItemChange change, const QVariant& value) override;
 
     QColor m_strokeColor = QColor(255, 30, 30);
     QColor m_fillColor = Qt::transparent;

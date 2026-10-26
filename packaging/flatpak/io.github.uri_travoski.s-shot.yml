@@ -21,5 +21,5 @@ modules:
       - -DCMAKE_BUILD_TYPE=Release
     sources:
       - type: archive
-        url: https://github.com/uri-travoski/s-shot/archive/refs/tags/v1.32.tar.gz
+        url: https://github.com/uri-travoski/s-shot/archive/refs/tags/v1.33.tar.gz
         sha256: 5b114e5309f6fde6577b840b5b8111201b407a0401829e4f90419e069230177c

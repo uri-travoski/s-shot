@@ -52,6 +52,7 @@ protected:
     void mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) override;
     void contextMenuEvent(QGraphicsSceneContextMenuEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
+    QVariant itemChange(GraphicsItemChange change, const QVariant& value) override;
 
 private:
     QColor m_strokeColor = QColor(255, 30, 30);

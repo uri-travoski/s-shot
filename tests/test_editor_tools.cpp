@@ -80,6 +80,10 @@ private slots:
     void testColorPickerTool();
     void testExactScreenshotBoundsAndDprNormalization();
     void testRightClickCopyAndToolbarCopy();
+    void testPastedImageResizeHandles();
+    void testPhotoshopStyleCropping();
+    void testCanvasBoundedAnnotations();
+    void testTrayIconSize();
 };
 
 void TestEditorTools::initTestCase() {
@@ -690,6 +694,7 @@ void TestEditorTools::testAutoCheckUpdatesSetting() {
 
 void TestEditorTools::testUpdateManagerVersionComparison() {
     // Newer remote versions
+    QVERIFY(UpdateManager::isVersionNewer("v1.33", "1.32"));
     QVERIFY(UpdateManager::isVersionNewer("v1.32", "1.31"));
     QVERIFY(UpdateManager::isVersionNewer("v1.31", "1.30"));
     QVERIFY(UpdateManager::isVersionNewer("v1.30", "1.29"));
@@ -889,7 +894,8 @@ void TestEditorTools::testMainWindowBadgeIntegration() {
     press.setButton(Qt::LeftButton);
     // Use TestScene or direct scene mousePressEvent via view
     win.currentView()->viewport()->show();
-    QTest::mouseClick(win.currentView()->viewport(), Qt::LeftButton, Qt::NoModifier, QPoint(100, 100));
+    QPoint clickPt = win.currentView()->mapFromScene(scene->sceneRect().center());
+    QTest::mouseClick(win.currentView()->viewport(), Qt::LeftButton, Qt::NoModifier, clickPt);
 
     // After placing 1 badge, the spinbox should automatically increment to 2!
     QCOMPARE(badgeSpin->value(), 2);
@@ -1949,6 +1955,204 @@ void TestEditorTools::testRightClickCopyAndToolbarCopy() {
     clipPix = ClipboardHelper::getClipboardImage();
     QVERIFY(!clipPix.isNull());
     QCOMPARE(clipPix.size(), QSize(30, 30));
+}
+
+void TestEditorTools::testPastedImageResizeHandles() {
+    CanvasScene scene;
+    QPixmap basePix(400, 300);
+    basePix.fill(Qt::white);
+    scene.setBasePixmap(basePix);
+
+    // Paste an 80x60 image
+    QImage pImg(80, 60, QImage::Format_ARGB32_Premultiplied);
+    pImg.fill(QColor(255, 0, 0));
+    QPixmap pastePix = QPixmap::fromImage(pImg);
+    scene.pasteImage(pastePix, QPointF(50, 50));
+
+    auto allItems = scene.items();
+    PixmapItem* pmItem = nullptr;
+    for (auto* it : allItems) {
+        if (auto* pm = dynamic_cast<PixmapItem*>(it)) {
+            pmItem = pm;
+            break;
+        }
+    }
+    QVERIFY(pmItem != nullptr);
+    QVERIFY(pmItem->isSelected());
+    QCOMPARE(pmItem->pixmap().size(), QSize(80, 60));
+
+    // Verify handleAt detects corners and edges
+    QCOMPARE(pmItem->handleAt(QPointF(0, 0)), PixmapItem::Handle::TopLeft);
+    QCOMPARE(pmItem->handleAt(QPointF(80, 60)), PixmapItem::Handle::BottomRight);
+    QCOMPARE(pmItem->handleAt(QPointF(40, 0)), PixmapItem::Handle::Top);
+    QCOMPARE(pmItem->handleAt(QPointF(80, 30)), PixmapItem::Handle::Right);
+    QCOMPARE(pmItem->handleAt(QPointF(40, 30)), PixmapItem::Handle::None); // inside
+
+    // Test cursor shapes
+    QCOMPARE(PixmapItem::cursorForHandle(PixmapItem::Handle::TopLeft), Qt::SizeFDiagCursor);
+    QCOMPARE(PixmapItem::cursorForHandle(PixmapItem::Handle::Top), Qt::SizeVerCursor);
+    QCOMPARE(PixmapItem::cursorForHandle(PixmapItem::Handle::Right), Qt::SizeHorCursor);
+
+    // Simulate resizing BottomRight handle: press at (130, 110) scene pos, move to (170, 140)
+    QGraphicsSceneMouseEvent press(QEvent::GraphicsSceneMousePress);
+    press.setButton(Qt::LeftButton);
+    press.setPos(QPointF(80, 60));
+    press.setScenePos(QPointF(130, 110));
+    pmItem->mousePressEvent(&press);
+
+    QGraphicsSceneMouseEvent move(QEvent::GraphicsSceneMouseMove);
+    move.setButtons(Qt::LeftButton);
+    move.setScenePos(QPointF(170, 140)); // +40 x, +30 y
+    pmItem->mouseMoveEvent(&move);
+
+    QGraphicsSceneMouseEvent release(QEvent::GraphicsSceneMouseRelease);
+    release.setButton(Qt::LeftButton);
+    pmItem->mouseReleaseEvent(&release);
+
+    // Size should now be 80+40 = 120, 60+30 = 90
+    QCOMPARE(pmItem->pixmap().width(), 120);
+    QCOMPARE(pmItem->pixmap().height(), 90);
+    // Original pixmap stays intact at 80x60
+    QCOMPARE(pmItem->originalPixmap().size(), QSize(80, 60));
+}
+
+void TestEditorTools::testPhotoshopStyleCropping() {
+    CanvasScene scene;
+    QPixmap basePix(400, 300);
+    basePix.fill(Qt::white);
+    scene.setBasePixmap(basePix);
+
+    scene.setCurrentTool(ToolType::Crop);
+    scene.setSelectedArea(QRectF(50, 50, 200, 150));
+    QVERIFY(scene.hasAreaSelection());
+
+    // Verify handle detection in crop mode
+    AreaSelectionItem* areaItem = nullptr;
+    for (auto* it : scene.items()) {
+        if (auto* ai = dynamic_cast<AreaSelectionItem*>(it)) {
+            areaItem = ai;
+            break;
+        }
+    }
+    QVERIFY(areaItem != nullptr);
+    QVERIFY(areaItem->isCropMode());
+
+    // Corner handle at (50, 50) is TopLeft
+    QCOMPARE(areaItem->handleAt(QPointF(50, 50)), AreaSelectionItem::Handle::TopLeft);
+    // BottomRight handle at (250, 200)
+    QCOMPARE(areaItem->handleAt(QPointF(250, 200)), AreaSelectionItem::Handle::BottomRight);
+    // Inside handle at (100, 100)
+    QCOMPARE(areaItem->handleAt(QPointF(100, 100)), AreaSelectionItem::Handle::Inside);
+
+    // Simulate resizing BottomRight handle
+    QGraphicsSceneMouseEvent press(QEvent::GraphicsSceneMousePress);
+    press.setButton(Qt::LeftButton);
+    press.setScenePos(QPointF(250, 200));
+    scene.mousePressEvent(&press);
+
+    QGraphicsSceneMouseEvent move(QEvent::GraphicsSceneMouseMove);
+    move.setButtons(Qt::LeftButton);
+    move.setScenePos(QPointF(280, 220)); // +30 x, +20 y
+    scene.mouseMoveEvent(&move);
+
+    QGraphicsSceneMouseEvent release(QEvent::GraphicsSceneMouseRelease);
+    release.setButton(Qt::LeftButton);
+    scene.mouseReleaseEvent(&release);
+
+    QCOMPARE(scene.selectedArea(), QRectF(50, 50, 230, 170));
+
+    // Simulate moving inside the crop area
+    QGraphicsSceneMouseEvent pressMove(QEvent::GraphicsSceneMousePress);
+    pressMove.setButton(Qt::LeftButton);
+    pressMove.setScenePos(QPointF(100, 100));
+    scene.mousePressEvent(&pressMove);
+
+    QGraphicsSceneMouseEvent moveInside(QEvent::GraphicsSceneMouseMove);
+    moveInside.setButtons(Qt::LeftButton);
+    moveInside.setScenePos(QPointF(110, 120)); // +10 x, +20 y
+    scene.mouseMoveEvent(&moveInside);
+
+    QGraphicsSceneMouseEvent releaseMove(QEvent::GraphicsSceneMouseRelease);
+    releaseMove.setButton(Qt::LeftButton);
+    scene.mouseReleaseEvent(&releaseMove);
+
+    QCOMPARE(scene.selectedArea(), QRectF(60, 70, 230, 170));
+
+    // Simulate double click to confirm crop
+    QGraphicsSceneMouseEvent dblClick(QEvent::GraphicsSceneMouseDoubleClick);
+    dblClick.setButton(Qt::LeftButton);
+    dblClick.setScenePos(QPointF(100, 100));
+    scene.mouseDoubleClickEvent(&dblClick);
+
+    // Scene should now be cropped to 230x170!
+    QCOMPARE(scene.sceneRect(), QRectF(0, 0, 230, 170));
+    QCOMPARE(scene.basePixmap().size(), QSize(230, 170));
+}
+
+void TestEditorTools::testCanvasBoundedAnnotations() {
+    CanvasScene scene;
+    QPixmap basePix(200, 150);
+    basePix.fill(Qt::white);
+    scene.setBasePixmap(basePix);
+
+    int initialItemCount = scene.items().count();
+
+    // 1. Text tool outside canvas: click at (300, 300) outside 200x150
+    scene.setCurrentTool(ToolType::Text);
+    QGraphicsSceneMouseEvent pressOutside(QEvent::GraphicsSceneMousePress);
+    pressOutside.setButton(Qt::LeftButton);
+    pressOutside.setScenePos(QPointF(300, 300));
+    scene.mousePressEvent(&pressOutside);
+
+    // Verify NO text item was added
+    QCOMPARE(scene.items().count(), initialItemCount);
+
+    // 2. Text tool inside canvas: click at (50, 50)
+    QGraphicsSceneMouseEvent pressInside(QEvent::GraphicsSceneMousePress);
+    pressInside.setButton(Qt::LeftButton);
+    pressInside.setScenePos(QPointF(50, 50));
+    scene.mousePressEvent(&pressInside);
+
+    TextItem* txt = nullptr;
+    for (auto* it : scene.items()) {
+        if (auto* t = dynamic_cast<TextItem*>(it)) {
+            txt = t;
+            break;
+        }
+    }
+    QVERIFY(txt != nullptr);
+
+    // 3. Try to drag text item outside the canvas
+    txt->setPos(QPointF(500, 500));
+    // Item position change should be clamped to within sceneRect()
+    QVERIFY(txt->pos().x() <= 200);
+    QVERIFY(txt->pos().y() <= 150);
+
+    // 4. Pen tool outside canvas: click at (300, 300)
+    scene.setCurrentTool(ToolType::Pen);
+    int countBeforePen = scene.items().count();
+    scene.mousePressEvent(&pressOutside);
+    QCOMPARE(scene.items().count(), countBeforePen);
+}
+
+void TestEditorTools::testTrayIconSize() {
+    QIcon trayIcon = IconManager::getTrayIcon();
+    QVERIFY(!trayIcon.isNull());
+
+    QList<QSize> sizes = trayIcon.availableSizes();
+    QVERIFY(sizes.contains(QSize(24, 24)));
+    QVERIFY(sizes.contains(QSize(16, 16)));
+    QCOMPARE(trayIcon.actualSize(QSize(24, 24)), QSize(24, 24));
+
+    QPixmap px24 = trayIcon.pixmap(24, 24);
+    QVERIFY(!px24.isNull());
+
+    // Verify border pixels have transparent breathing room (10% scale padding)
+    QImage img = px24.toImage();
+    QCOMPARE(img.pixelColor(0, 0).alpha(), 0);
+    QCOMPARE(img.pixelColor(img.width() - 1, 0).alpha(), 0);
+    QCOMPARE(img.pixelColor(0, img.height() - 1).alpha(), 0);
+    QCOMPARE(img.pixelColor(img.width() - 1, img.height() - 1).alpha(), 0);
 }
 
 int main(int argc, char** argv) {
